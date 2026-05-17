@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mac MQTT Energy config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "mqtt_host": {
+      "type": "string",
+      "default": "mqtt.example.local"
+    },
+    "mqtt_port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 1883
+    },
+    "mqtt_username": {
+      "type": "string"
+    },
+    "mqtt_password": {
+      "type": "string"
+    },
+    "mqtt_client_id": {
+      "type": "string",
+      "default": "mac-mqtt-energy"
+    },
+    "discovery_prefix": {
+      "type": "string",
+      "default": "homeassistant"
+    },
+    "topic_prefix": {
+      "type": "string",
+      "default": "mac_mqtt_energy"
+    },
+    "device_id": {
+      "type": "string",
+      "default": "mac"
+    },
+    "device_name": {
+      "type": "string",
+      "default": "Mac"
+    },
+    "sample_interval_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "default": 30
+    },
+    "max_energy_gap_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "default": 300
+    },
+    "state_path": {
+      "type": "string",
+      "default": "~/.local/state/mac-mqtt-energy/state.json"
+    },
+    "publish_retain": {
+      "type": "boolean",
+      "default": true
+    },
+    "verbose": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

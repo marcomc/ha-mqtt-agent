@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+from mac_mqtt_energy.sensors import parse_ioreg_sample
+
+
+def test_parse_ioreg_sample_reads_power_and_battery_fields() -> None:
+    sample = parse_ioreg_sample(
+        """
+        +-o AppleSmartBattery
+          {
+            "CurrentCapacity" = 74
+            "ExternalConnected" = Yes
+            "FullyCharged" = No
+            "IsCharging" = Yes
+            "MaxCapacity" = 100
+            "AppleRawMaxCapacity" = 4644
+            "DesignCapacity" = 6075
+            "CycleCount" = 219
+            "PowerTelemetryData" = {"SystemPowerIn"=83526}
+          }
+        """,
+        host_name="macbook",
+    )
+
+    assert sample.host_name == "macbook"
+    assert sample.power_w == 83.526
+    assert sample.battery_percent == 74
+    assert sample.battery_max_capacity_percent == 100
+    assert sample.battery_max_capacity_mah == 4644
+    assert sample.battery_design_capacity_mah == 6075
+    assert sample.battery_cycle_count == 219
+    assert sample.battery_status == "charging"
+    assert sample.external_power is True
+
+
+def test_parse_ioreg_sample_falls_back_to_battery_power_estimate() -> None:
+    sample = parse_ioreg_sample(
+        """
+        {
+          "InstantAmperage" = -1200
+          "Voltage" = 12500
+          "ExternalConnected" = No
+          "IsCharging" = No
+        }
+        """,
+    )
+
+    assert sample.power_w == 15
+    assert sample.battery_status == "discharging"

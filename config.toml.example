@@ -1,0 +1,20 @@
+# Copy this file to ~/.config/mac-mqtt-energy/config.toml or pass it with
+# --config.
+
+mqtt_host = "mqtt.example.local"
+mqtt_port = 1883
+# mqtt_username = "homeassistant"
+# mqtt_password = "change-me"
+
+mqtt_client_id = "mac-mqtt-energy"
+discovery_prefix = "homeassistant"
+topic_prefix = "mac_mqtt_energy"
+
+device_id = "mac"
+device_name = "Mac"
+
+sample_interval_seconds = 30
+max_energy_gap_seconds = 300
+state_path = "~/.local/state/mac-mqtt-energy/state.json"
+publish_retain = true
+verbose = false
