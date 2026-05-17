@@ -23,6 +23,23 @@ def test_discovery_messages_define_home_assistant_energy_sensor() -> None:
     assert payload["state_topic"] == "mac_mqtt_energy/work_mac/state"
 
 
+def test_discovery_messages_define_temperature_and_uptime_sensors() -> None:
+    config = AppConfig(device_id="work_mac", device_name="Work Mac")
+    messages = {
+        message.topic: json.loads(message.payload) for message in discovery_messages(config)
+    }
+
+    temperature = messages["homeassistant/sensor/work_mac_battery_temperature/config"]
+    assert temperature["device_class"] == "temperature"
+    assert temperature["unit_of_measurement"] == "°C"
+    assert temperature["value_template"] == "{{ value_json.battery_temperature_c }}"
+
+    uptime = messages["homeassistant/sensor/work_mac_uptime/config"]
+    assert uptime["device_class"] == "duration"
+    assert uptime["unit_of_measurement"] == "s"
+    assert uptime["value_template"] == "{{ value_json.uptime_seconds }}"
+
+
 def test_state_message_uses_compact_json_and_configured_topic() -> None:
     config = AppConfig(device_id="work_mac")
 

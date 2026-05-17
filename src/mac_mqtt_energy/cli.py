@@ -169,9 +169,11 @@ def _handle_sample(config: AppConfig, as_json: bool) -> int:
     print(f"host_name: {payload['host_name']}")
     print(f"power_w: {payload['power_w']}")
     print(f"energy_kwh: {payload['energy_kwh']}")
+    print(f"uptime_seconds: {payload['uptime_seconds']}")
     print(f"battery_percent: {payload['battery_percent']}")
     print(f"battery_max_capacity_percent: {payload['battery_max_capacity_percent']}")
     print(f"battery_max_capacity_mah: {payload['battery_max_capacity_mah']}")
+    print(f"battery_temperature_c: {payload['battery_temperature_c']}")
     print(f"battery_status: {payload['battery_status']}")
     return 0
 

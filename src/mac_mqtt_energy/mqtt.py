@@ -68,6 +68,32 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "template": "{{ value_json.battery_max_capacity_mah }}",
         },
         {
+            "object": "battery_design_capacity",
+            "name": "Battery design capacity",
+            "unique": "battery_design_capacity",
+            "state_class": "measurement",
+            "unit": "mAh",
+            "template": "{{ value_json.battery_design_capacity_mah }}",
+        },
+        {
+            "object": "battery_temperature",
+            "name": "Battery temperature",
+            "unique": "battery_temperature",
+            "device_class": "temperature",
+            "state_class": "measurement",
+            "unit": "°C",
+            "template": "{{ value_json.battery_temperature_c }}",
+        },
+        {
+            "object": "battery_virtual_temperature",
+            "name": "Battery virtual temperature",
+            "unique": "battery_virtual_temperature",
+            "device_class": "temperature",
+            "state_class": "measurement",
+            "unit": "°C",
+            "template": "{{ value_json.battery_virtual_temperature_c }}",
+        },
+        {
             "object": "battery_cycle_count",
             "name": "Battery cycle count",
             "unique": "battery_cycle_count",
@@ -79,6 +105,15 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "name": "Battery status",
             "unique": "battery_status",
             "template": "{{ value_json.battery_status }}",
+        },
+        {
+            "object": "uptime",
+            "name": "Uptime",
+            "unique": "uptime",
+            "device_class": "duration",
+            "state_class": "measurement",
+            "unit": "s",
+            "template": "{{ value_json.uptime_seconds }}",
         },
     ]
     return [_sensor_discovery_message(config, sensor) for sensor in sensors]
