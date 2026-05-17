@@ -1,11 +1,11 @@
-# Developer Notes
-
-This scaffold is intentionally opinionated.
+# Documentation
 
 ## User Guides
 
 - [Home Assistant Setup](home-assistant-setup.md): configure MQTT discovery,
-  confirm the host device, and add its energy sensor to the Energy dashboard.
+  confirm the Mac device, and add its energy sensor to the Energy dashboard.
+- [Roadmap](roadmap.md): future command, security, provider, and release work
+  linked to numbered backlog tickets in [TODO.md](../TODO.md).
 
 ## Installer Shape
 
@@ -23,14 +23,13 @@ operational behavior is defined in one place.
 - `src/` package layout
 - `argparse` for a small CLI surface
 - TOML config loading via `tomllib`
-- strict-enough static checks for early signal without heavy ceremony
+- `make check` for tests, typing, formatting, Markdown, and shell linting
 
 ## Intended Workflow
 
-1. Generate a new project from the template.
-2. Keep sensor collection, energy accumulation, and MQTT publishing in separate
+1. Keep sensor collection, energy accumulation, and MQTT publishing in separate
    modules.
-3. Keep `README.md`, `CHANGELOG.md`, and `TODO.md` current as the project
+2. Keep `README.md`, `CHANGELOG.md`, and `TODO.md` current as the project
    evolves.
-4. Preserve `make install-agent` as the durable service installation path unless
+3. Preserve `make install-agent` as the durable service installation path unless
    you have a reason to redesign distribution.

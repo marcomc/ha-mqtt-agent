@@ -4,22 +4,24 @@
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
-- [Quick Setup on a Mac](#quick-setup-on-a-mac)
 - [Step 1: Configure MQTT in Home Assistant](#step-1-configure-mqtt-in-home-assistant)
 - [Step 2: Configure Home Assistant MQTT Agent](#step-2-configure-home-assistant-mqtt-agent)
 - [Step 3: Publish the Device](#step-3-publish-the-device)
 - [Step 4: Confirm the Device and Entities](#step-4-confirm-the-device-and-entities)
-- [Step 5: Add the Host to the Energy Dashboard](#step-5-add-the-host-to-the-energy-dashboard)
-- [Step 6: Run the Publisher in the Background](#step-6-run-the-publisher-in-the-background)
+- [Step 5: Add the Mac to the Energy Dashboard](#step-5-add-the-mac-to-the-energy-dashboard)
+- [Step 6: Run in the Background](#step-6-run-in-the-background)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
 
 ## Overview
 
-Home Assistant MQTT Agent publishes this host as a Home Assistant MQTT device.
+Home Assistant MQTT Agent publishes this Mac as a Home Assistant MQTT device.
 Home Assistant reads retained MQTT discovery messages, creates the device, and
 then uses the retained state topic for the current power, accumulated energy,
 and battery sensors.
+
+For the LaunchAgent-to-MQTT runtime flow, see
+[Runtime Flow](../README.md#runtime-flow).
 
 ```mermaid
 flowchart LR
@@ -27,54 +29,26 @@ flowchart LR
   accDescr: Shows the setup path from MQTT integration to Energy dashboard.
   mqtt["Configure MQTT integration"] --> config["Configure Home Assistant MQTT Agent"]
   config --> publish["Publish discovery and state"]
-  publish --> device["Home Assistant creates host device"]
+  publish --> device["Home Assistant creates Mac device"]
   device --> energy["Add Energy entity to dashboard"]
   energy --> agent["Run LaunchAgent continuously"]
 ```
 
 ## Prerequisites
 
-- A macOS host. Linux and Raspberry Pi hosts are not supported yet.
+- A Mac. Linux and Raspberry Pi hosts are not supported yet.
 - Home Assistant is running and reachable.
 - Home Assistant has the MQTT integration installed and connected to the same
-  broker used by this host.
+  broker used by this Mac.
 - MQTT discovery is enabled. The default discovery prefix is `homeassistant`.
-- This host can reach the broker hostname and port configured in
+- This Mac can reach the broker hostname and port configured in
   `~/.config/ha-mqtt-agent/config.toml`.
 
-Set the broker host for your Home Assistant MQTT setup:
+Set the broker for your Home Assistant MQTT setup:
 
 ```toml
 mqtt_host = "mqtt.example.local"
 mqtt_port = 1883
-```
-
-## Quick Setup on a Mac
-
-From the cloned repository:
-
-```bash
-./scripts/install.sh
-```
-
-Then edit:
-
-```bash
-$EDITOR ~/.config/ha-mqtt-agent/config.toml
-```
-
-Set at least:
-
-```toml
-mqtt_host = "mqtt.example.local"
-device_id = "workstation"
-device_name = "Workstation"
-```
-
-Restart the service:
-
-```bash
-make restart-agent
 ```
 
 ## Step 1: Configure MQTT in Home Assistant
@@ -88,16 +62,11 @@ make restart-agent
    `homeassistant` unless your broker setup uses a different prefix.
 
 If your broker allows anonymous access, Home Assistant only needs the broker
-host and port.
+hostname and port.
 
 ## Step 2: Configure Home Assistant MQTT Agent
 
-Install the app if it is not installed yet:
-
-```bash
-cd /path/to/ha-mqtt-agent
-make install-agent
-```
+Install the app first using the README quick install instructions.
 
 Edit the config file:
 
@@ -173,9 +142,9 @@ It also publishes retained state to:
 ha_mqtt_agent/workstation/state
 ```
 
-MQTT discovery also sets `expire_after` from `expire_after_seconds`. With the
-default value, Home Assistant marks the sensors unavailable after 15 seconds
-without a fresh state message.
+MQTT discovery sets `expire_after` from `expire_after_seconds`. With the default
+value, Home Assistant marks the sensors unavailable after 15 seconds without a
+fresh state message.
 
 ## Step 4: Confirm the Device and Entities
 
@@ -206,7 +175,7 @@ sensor.workstation_battery
 
 Home Assistant may append a suffix if an entity ID already exists.
 
-## Step 5: Add the Host to the Energy Dashboard
+## Step 5: Add the Mac to the Energy Dashboard
 
 The Energy dashboard needs an energy entity, not only a power entity. Use the
 `Energy` entity published by this app, because it is reported in `kWh` with
@@ -215,7 +184,7 @@ The Energy dashboard needs an energy entity, not only a power entity. Use the
 1. Go to **Settings > Dashboards > Energy**.
 2. Open the individual devices section.
 3. Add a device energy consumption entry.
-4. Select the host energy entity, for example `sensor.workstation_energy`.
+4. Select the Mac energy entity, for example `sensor.workstation_energy`.
 5. Save the Energy dashboard configuration.
 
 The `Power` entity can be used for live cards and automations. The Energy
@@ -224,9 +193,9 @@ dashboard uses the `Energy` entity for long-term consumption history.
 Battery temperature, maximum capacity, and uptime can be added to normal Home
 Assistant dashboards. They are not Energy dashboard inputs.
 
-## Step 6: Run the Publisher in the Background
+## Step 6: Run in the Background
 
-Install and start the per-user LaunchAgent:
+Install or restart the per-user LaunchAgent:
 
 ```bash
 make install-agent
@@ -279,7 +248,7 @@ Check the error log:
 tail -n 100 ~/Library/Logs/ha-mqtt-agent/err.log
 ```
 
-Then verify broker reachability from the host:
+Then verify broker reachability from the Mac:
 
 ```bash
 nc -vz mqtt.example.local 1883

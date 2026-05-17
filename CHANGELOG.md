@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- Home Assistant MQTT discovery publisher for macOS host telemetry.
+- Home Assistant MQTT discovery publisher for macOS telemetry.
 - Power, energy, battery charge, battery health, battery capacity, battery
   temperature, cycle count, charge status, and uptime sensors.
 - Persistent kWh energy accumulator for Home Assistant Energy dashboard use.

@@ -1,32 +1,43 @@
 # TODO
 
-## Next Steps
+## Backlog
 
+### HMA-001 Persistent MQTT Command Loop
+
+- Roadmap: [HMA-001](docs/roadmap.md#hma-001-persistent-mqtt-command-loop)
 - Implement a persistent MQTT command loop for `ha-mqtt-agent run`.
-  - Keep telemetry publishing active on the same outbound broker connection.
-  - Subscribe only to `ha_mqtt_agent/<device_id>/command/+`.
-  - Ignore retained command messages.
-  - Publish command acknowledgements, failures, and last-run timestamps.
+
+### HMA-002 Home Assistant Command Entities
+
+- Roadmap: [HMA-002](docs/roadmap.md#hma-002-home-assistant-command-entities)
 - Add MQTT discovery for safe Home Assistant command entities.
-  - Start with buttons for refresh telemetry, sleep display, lock screen, and
-    open an allowlisted application.
-  - Use switches only for commands with reliable state feedback.
-  - Keep command payloads non-retained.
-- Add command safety controls.
-  - Require explicit config flags for every command group.
-  - Use allowlists for application names, service names, and maintenance tasks.
-  - Reject arbitrary shell commands from MQTT payloads.
-  - Add structured command logs.
-- Add Home Assistant Wake-on-LAN documentation.
-  - Document the Wake-on-LAN button as a Home Assistant-side action, not a host
-    MQTT command.
-  - Document pairing it with ping or MQTT availability state.
-  - Call out wired Ethernet as the preferred target for reliable wake.
+
+### HMA-003 Command Safety Controls
+
+- Roadmap: [HMA-003](docs/roadmap.md#hma-003-command-safety-controls)
+- Add command safety controls and structured command logs.
+
+### HMA-004 Wake-on-LAN Documentation
+
+- Roadmap: [HMA-004](docs/roadmap.md#hma-004-wake-on-lan-documentation)
+- Document Home Assistant Wake-on-LAN setup.
+
+### HMA-005 Privileged Action Boundary
+
+- Roadmap: [HMA-005](docs/roadmap.md#hma-005-privileged-action-boundary)
 - Design the privileged action boundary.
-  - Keep user-session actions in the LaunchAgent.
-  - Add a separate narrow privileged helper only if root-only actions are
-    required.
-  - Document which actions belong in the LaunchAgent, LaunchDaemon, or helper.
+
+### HMA-006 MQTT TLS Settings
+
+- Roadmap: [HMA-006](docs/roadmap.md#hma-006-mqtt-tls-settings)
 - Add optional TLS settings for hardened MQTT brokers.
-- Add Linux power-source plugins for non-macOS systems.
-- Add release automation if the project will publish packages or binaries.
+
+### HMA-007 Linux and Raspberry Pi Providers
+
+- Roadmap: [HMA-007](docs/roadmap.md#hma-007-linux-and-raspberry-pi-providers)
+- Add Linux and Raspberry Pi telemetry providers.
+
+### HMA-008 Release Automation
+
+- Roadmap: [HMA-008](docs/roadmap.md#hma-008-release-automation)
+- Add release automation when publishing packages or binaries.
