@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -8,6 +9,7 @@ import pytest
 
 from ha_mqtt_agent import __version__, cli
 from ha_mqtt_agent.config import AppConfig, load_config
+from ha_mqtt_agent.sensors import SensorSample
 
 
 def test_main_without_args_prints_focused_help(capsys: pytest.CaptureFixture[str]) -> None:
@@ -87,6 +89,14 @@ def test_config_reads_expire_after_seconds(tmp_path: Path) -> None:
     assert config.expire_after_seconds == 5
 
 
+def test_config_rejects_max_energy_gap_below_supported_minimum(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("max_energy_gap_seconds = 0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="max_energy_gap_seconds must be at least 1 second"):
+        load_config(config_path)
+
+
 def test_config_defaults_to_five_second_publish_and_fifteen_second_expiry(
     tmp_path: Path,
 ) -> None:
@@ -97,6 +107,41 @@ def test_config_defaults_to_five_second_publish_and_fifteen_second_expiry(
 
     assert config.sample_interval_seconds == 5
     assert config.expire_after_seconds == 15
+
+
+def test_sample_command_does_not_write_energy_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    sample = SensorSample(
+        timestamp=datetime(2026, 5, 17, 10, 0, tzinfo=UTC),
+        host_name="macbook",
+        uptime_seconds=123,
+        power_w=12.5,
+        battery_percent=80,
+        battery_max_capacity_percent=90,
+        battery_max_capacity_mah=4500,
+        battery_design_capacity_mah=5000,
+        battery_reported_max_capacity_percent=100,
+        battery_temperature_c=32.5,
+        battery_virtual_temperature_c=33.5,
+        battery_cycle_count=20,
+        battery_status="charging",
+        external_power=True,
+    )
+    reader = Mock()
+    reader.read.return_value = sample
+    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
+
+    result = cli._handle_sample(config, as_json=True)
+
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert result == 0
+    assert payload["energy_kwh"] == 0
+    assert not config.state_path.exists()
 
 
 def test_publish_once_sends_discovery_availability_and_state(

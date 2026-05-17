@@ -46,17 +46,24 @@ class EnergyAccumulator:
         self._save()
         return energy_kwh
 
+    @property
+    def energy_kwh(self) -> float:
+        return self.state.energy_kwh
+
     def _load(self) -> EnergyState:
         if not self.path.exists():
             return EnergyState()
-        data = json.loads(self.path.read_text(encoding="utf-8"))
-        if not isinstance(data, dict):
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return EnergyState()
+            return EnergyState(
+                energy_kwh=float(data.get("energy_kwh", 0.0)),
+                last_timestamp=_parse_timestamp(data.get("last_timestamp")),
+                last_power_w=_parse_float(data.get("last_power_w")),
+            )
+        except (OSError, ValueError, TypeError):
             return EnergyState()
-        return EnergyState(
-            energy_kwh=float(data.get("energy_kwh", 0.0)),
-            last_timestamp=_parse_timestamp(data.get("last_timestamp")),
-            last_power_w=_parse_float(data.get("last_power_w")),
-        )
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)

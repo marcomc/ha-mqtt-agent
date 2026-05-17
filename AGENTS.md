@@ -51,6 +51,10 @@ Expected checks:
 - Keep `CHANGELOG.md` updated in `Unreleased` for user-visible changes.
 - Remove completed items from `TODO.md` when they ship.
 - Update config documentation when adding or changing config keys.
+- Keep read-only CLI commands such as `info` and `sample` free of persistent
+  writes, network publishes, and service changes.
+- When adding or changing config keys, keep loader validation, schema bounds,
+  examples, docs, and tests synchronized.
 
 ## Release Hygiene
 

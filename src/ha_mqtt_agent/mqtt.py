@@ -142,7 +142,10 @@ def publish_messages(config: AppConfig, messages: Iterable[MqttMessage]) -> None
         client.username_pw_set(config.mqtt_username, config.mqtt_password)
 
     client.will_set(config.availability_topic, payload="offline", retain=True)
-    client.connect(config.mqtt_host, config.mqtt_port, keepalive=60)
+    _raise_for_mqtt_error(
+        client.connect(config.mqtt_host, config.mqtt_port, keepalive=60),
+        "connect",
+    )
     client.loop_start()
     try:
         for message in messages:
@@ -152,10 +155,17 @@ def publish_messages(config: AppConfig, messages: Iterable[MqttMessage]) -> None
                 qos=0,
                 retain=message.retain,
             )
+            _raise_for_mqtt_error(result.rc, f"publish to {message.topic}")
             result.wait_for_publish()
     finally:
         client.loop_stop()
         client.disconnect()
+
+
+def _raise_for_mqtt_error(rc: int, action: str) -> None:
+    if rc == mqtt.MQTT_ERR_SUCCESS:
+        return
+    raise RuntimeError(f"MQTT {action} failed: {mqtt.error_string(rc)}")
 
 
 def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMessage:

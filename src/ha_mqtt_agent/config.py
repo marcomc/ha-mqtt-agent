@@ -76,7 +76,11 @@ def load_config(path: Path) -> AppConfig:
             minimum=1.0,
             key="expire_after_seconds",
         ),
-        max_energy_gap_seconds=float(data.get("max_energy_gap_seconds", 300.0)),
+        max_energy_gap_seconds=_float_at_least(
+            data.get("max_energy_gap_seconds", 300.0),
+            minimum=1.0,
+            key="max_energy_gap_seconds",
+        ),
         state_path=Path(str(data.get("state_path", DEFAULT_STATE_PATH))).expanduser(),
         publish_retain=bool(data.get("publish_retain", True)),
         verbose=bool(data.get("verbose", False)),

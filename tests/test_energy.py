@@ -27,3 +27,12 @@ def test_energy_accumulator_ignores_large_gaps(tmp_path: Path) -> None:
     energy = accumulator.update(timestamp=start + timedelta(seconds=120), power_w=100)
 
     assert energy == 0
+
+
+def test_energy_accumulator_resets_unreadable_state(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text("{not json", encoding="utf-8")
+
+    accumulator = EnergyAccumulator(state_path, max_gap_seconds=60)
+
+    assert accumulator.energy_kwh == 0

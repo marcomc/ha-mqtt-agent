@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 
+import paho.mqtt.client as paho_mqtt
+import pytest
+from paho.mqtt.enums import MQTTErrorCode
+
 from ha_mqtt_agent.config import AppConfig
-from ha_mqtt_agent.mqtt import discovery_messages, state_message
+from ha_mqtt_agent.mqtt import MqttMessage, discovery_messages, publish_messages, state_message
 
 
 def test_discovery_messages_define_home_assistant_energy_sensor() -> None:
@@ -56,3 +60,77 @@ def test_state_message_uses_compact_json_and_configured_topic() -> None:
 
     assert message.topic == "ha_mqtt_agent/workstation/state"
     assert json.loads(message.payload) == {"energy_kwh": 0.01, "power_w": 12.5}
+
+
+def test_publish_messages_raises_on_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient(connect_rc=paho_mqtt.MQTT_ERR_NO_CONN)
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    with pytest.raises(RuntimeError, match="MQTT connect failed"):
+        publish_messages(AppConfig(), [MqttMessage("topic", "payload")])
+
+    assert client.loop_started is False
+    assert client.disconnected is False
+
+
+def test_publish_messages_raises_on_publish_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient(publish_rc=paho_mqtt.MQTT_ERR_NO_CONN)
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    with pytest.raises(RuntimeError, match="MQTT publish to topic failed"):
+        publish_messages(AppConfig(), [MqttMessage("topic", "payload")])
+
+    assert client.loop_stopped is True
+    assert client.disconnected is True
+
+
+class _FakePublishResult:
+    def __init__(self, rc: MQTTErrorCode) -> None:
+        self.rc = rc
+        self.waited = False
+
+    def wait_for_publish(self) -> None:
+        self.waited = True
+
+
+class _FakeClient:
+    def __init__(
+        self,
+        *,
+        connect_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
+        publish_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
+    ) -> None:
+        self.connect_rc = connect_rc
+        self.publish_rc = publish_rc
+        self.loop_started = False
+        self.loop_stopped = False
+        self.disconnected = False
+
+    def username_pw_set(self, username: str, password: str | None = None) -> None:
+        _ = (username, password)
+
+    def will_set(self, topic: str, payload: str, retain: bool) -> None:
+        _ = (topic, payload, retain)
+
+    def connect(self, host: str, port: int, keepalive: int) -> MQTTErrorCode:
+        _ = (host, port, keepalive)
+        return self.connect_rc
+
+    def loop_start(self) -> None:
+        self.loop_started = True
+
+    def publish(
+        self,
+        topic: str,
+        payload: str,
+        qos: int,
+        retain: bool,
+    ) -> _FakePublishResult:
+        _ = (topic, payload, qos, retain)
+        return _FakePublishResult(self.publish_rc)
+
+    def loop_stop(self) -> None:
+        self.loop_stopped = True
+
+    def disconnect(self) -> None:
+        self.disconnected = True

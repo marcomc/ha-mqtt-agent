@@ -151,17 +151,21 @@ def _handle_info(config: AppConfig, config_path: Path, as_json: bool) -> int:
     return 0
 
 
-def _sample_payload(config: AppConfig) -> dict[str, object]:
+def _sample_payload(config: AppConfig, *, update_energy: bool = True) -> dict[str, object]:
     sample = IoregSensorReader().read()
-    energy_kwh = EnergyAccumulator(
+    accumulator = EnergyAccumulator(
         config.state_path,
         max_gap_seconds=config.max_energy_gap_seconds,
-    ).update(timestamp=sample.timestamp, power_w=sample.power_w)
+    )
+    if update_energy:
+        energy_kwh = accumulator.update(timestamp=sample.timestamp, power_w=sample.power_w)
+    else:
+        energy_kwh = accumulator.energy_kwh
     return sample.payload(energy_kwh=energy_kwh)
 
 
 def _handle_sample(config: AppConfig, as_json: bool) -> int:
-    payload = _sample_payload(config)
+    payload = _sample_payload(config, update_energy=False)
     if as_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
