@@ -4,6 +4,7 @@
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
+- [Quick Setup on a Mac](#quick-setup-on-a-mac)
 - [Step 1: Configure MQTT in Home Assistant](#step-1-configure-mqtt-in-home-assistant)
 - [Step 2: Configure Home Assistant MQTT Agent](#step-2-configure-home-assistant-mqtt-agent)
 - [Step 3: Publish the Device](#step-3-publish-the-device)
@@ -33,6 +34,7 @@ flowchart LR
 
 ## Prerequisites
 
+- A macOS host. Linux and Raspberry Pi hosts are not supported yet.
 - Home Assistant is running and reachable.
 - Home Assistant has the MQTT integration installed and connected to the same
   broker used by this host.
@@ -45,6 +47,34 @@ Set the broker host for your Home Assistant MQTT setup:
 ```toml
 mqtt_host = "mqtt.example.local"
 mqtt_port = 1883
+```
+
+## Quick Setup on a Mac
+
+From the cloned repository:
+
+```bash
+./scripts/install.sh
+```
+
+Then edit:
+
+```bash
+$EDITOR ~/.config/ha-mqtt-agent/config.toml
+```
+
+Set at least:
+
+```toml
+mqtt_host = "mqtt.example.local"
+device_id = "workstation"
+device_name = "Workstation"
+```
+
+Restart the service:
+
+```bash
+make restart-agent
 ```
 
 ## Step 1: Configure MQTT in Home Assistant
@@ -66,7 +96,7 @@ Install the app if it is not installed yet:
 
 ```bash
 cd /path/to/ha-mqtt-agent
-make install
+make install-agent
 ```
 
 Edit the config file:
@@ -256,6 +286,22 @@ nc -vz mqtt.example.local 1883
 ```
 
 Temporary broker or network failures are retried by the service loop.
+
+### The device alternates between available and unavailable
+
+- Keep `expire_after_seconds` longer than `sample_interval_seconds`.
+- The default publishes every 5 seconds and expires after 15 seconds.
+- Restart the LaunchAgent after changing either value.
+
+### The install script reports missing tools
+
+- Install Xcode Command Line Tools if `make` is missing:
+
+  ```bash
+  xcode-select --install
+  ```
+
+- Install Python 3.11 or newer if `python3` is missing or too old.
 
 ### CPU, GPU, fan, or SSD temperatures are missing
 

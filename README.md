@@ -6,12 +6,14 @@
 - [Telemetry Flow](#telemetry-flow)
 - [Features](#features)
 - [Requirements](#requirements)
+- [Quick Install](#quick-install)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Home Assistant Entities](#home-assistant-entities)
 - [Command and Control Roadmap](#command-and-control-roadmap)
 - [Running as a macOS Service](#running-as-a-macos-service)
+- [Troubleshooting](#troubleshooting)
 - [Project Layout](#project-layout)
 - [Development](#development)
 - [Release Notes](#release-notes)
@@ -66,6 +68,9 @@ flowchart LR
 - Persistent local energy accumulator that survives restarts.
 - Packaged command-line app exposed as `ha-mqtt-agent`.
 
+Only macOS hosts are supported in this release. Linux and Raspberry Pi hosts
+need a future provider that does not depend on AppleSmartBattery telemetry.
+
 ## Requirements
 
 For users:
@@ -81,6 +86,38 @@ For maintainers:
 - `markdownlint`
 - `shellcheck`
 
+## Quick Install
+
+Clone the repository on the Mac you want to publish and run:
+
+```bash
+./scripts/install.sh
+```
+
+The script is a user-friendly wrapper around `make install-agent`. It checks the
+local prerequisites, installs the standalone runtime, creates the config
+template if needed, and starts the per-user LaunchAgent.
+
+Edit the MQTT and device settings:
+
+```bash
+$EDITOR ~/.config/ha-mqtt-agent/config.toml
+```
+
+At minimum, set:
+
+```toml
+mqtt_host = "mqtt.example.local"
+device_id = "workstation"
+device_name = "Workstation"
+```
+
+Then restart the service:
+
+```bash
+make restart-agent
+```
+
 ## Installation
 
 Clone the repository and install the standalone runtime:
@@ -88,10 +125,10 @@ Clone the repository and install the standalone runtime:
 ```bash
 git clone <repo-url>
 cd ha-mqtt-agent
-make install
+make install-agent
 ```
 
-`make install`:
+`make install-agent`:
 
 - creates a standalone virtual environment in
   `~/.local/share/ha-mqtt-agent/venv`
@@ -100,15 +137,10 @@ make install
 - links the command to `~/.local/bin/ha-mqtt-agent`
 - installs a config template to `~/.config/ha-mqtt-agent/config.toml` if it
   does not exist yet
+- installs and starts the per-user macOS LaunchAgent
 
 If `~/.local/bin` is not on your `PATH`, `make check-deps` prints the shell
 snippet to add it.
-
-Install and start the background service:
-
-```bash
-make install-agent
-```
 
 This installs a per-user macOS LaunchAgent named
 `com.marcomc.ha-mqtt-agent`.
@@ -439,6 +471,37 @@ flowchart LR
   running --> uninstall["make uninstall-agent"]
   uninstall --> removed["Plist removed"]
 ```
+
+## Troubleshooting
+
+Check the installed configuration:
+
+```bash
+ha-mqtt-agent info
+```
+
+Publish one sample manually:
+
+```bash
+ha-mqtt-agent publish-once
+```
+
+Check the background service:
+
+```bash
+make agent-status
+tail -n 100 ~/Library/Logs/ha-mqtt-agent/err.log
+```
+
+Confirm that the Mac can reach the MQTT broker:
+
+```bash
+nc -vz mqtt.example.local 1883
+```
+
+If Home Assistant still shows stale values, confirm the discovery payload has
+the expected `expire_after` value and restart the LaunchAgent after config
+changes.
 
 ## Project Layout
 
