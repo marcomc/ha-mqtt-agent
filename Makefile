@@ -1,12 +1,13 @@
 SHELL := /bin/bash
 
 UV ?= uv
+STANDALONE_PYTHON ?= python3
 PYTHON_VERSION ?= 3.11
 VENV ?= .venv
-PROJECT_NAME ?= Mac MQTT Energy
-CLI_NAME ?= mac-mqtt-energy
-PACKAGE_NAME ?= mac_mqtt_energy
-CONFIG_NAME ?= mac-mqtt-energy
+PROJECT_NAME ?= Home Assistant MQTT Agent
+CLI_NAME ?= ha-mqtt-agent
+PACKAGE_NAME ?= ha_mqtt_agent
+CONFIG_NAME ?= ha-mqtt-agent
 PREFIX ?= $(HOME)/.local
 BINDIR ?= $(PREFIX)/bin
 INSTALL_PATH ?= $(BINDIR)/$(CLI_NAME)
@@ -19,15 +20,29 @@ MARKDOWN_FILES := README.md CHANGELOG.md TODO.md AGENTS.md docs/*.md
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check-deps sync install install-dev install-link install-config install-agent uninstall-agent restart-agent agent-status uninstall lint test check run clean
+.PHONY: help check-deps check-install-deps sync install install-dev install-link install-config install-agent uninstall-agent restart-agent agent-status uninstall lint test check run clean
 
 help: ## Show available targets
 	@awk 'BEGIN { FS = ":.*##" } /^[a-zA-Z_-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 check-deps: ## Verify required local tools
 	@command -v "$(UV)" >/dev/null 2>&1 || { echo "uv not found"; exit 1; }
+	@command -v "$(STANDALONE_PYTHON)" >/dev/null 2>&1 || { echo "$(STANDALONE_PYTHON) not found"; exit 1; }
 	@command -v markdownlint >/dev/null 2>&1 || { echo "markdownlint not found"; exit 1; }
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not found"; exit 1; }
+	@$(STANDALONE_PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else "$(STANDALONE_PYTHON) must be Python 3.11 or newer")'
+	@mkdir -p "$(BINDIR)" "$(CONFIG_DIR)"
+	@if echo "$$PATH" | tr ':' '\n' | grep -Fxq "$(BINDIR)"; then \
+		echo "$(BINDIR) is on PATH"; \
+	else \
+		echo "warning: $(BINDIR) is not on PATH"; \
+		echo "add this to your shell profile:"; \
+		echo "export PATH=\"$(BINDIR):\$$PATH\""; \
+	fi
+
+check-install-deps: ## Verify tools needed for the standalone install
+	@command -v "$(STANDALONE_PYTHON)" >/dev/null 2>&1 || { echo "$(STANDALONE_PYTHON) not found"; exit 1; }
+	@$(STANDALONE_PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else "$(STANDALONE_PYTHON) must be Python 3.11 or newer")'
 	@mkdir -p "$(BINDIR)" "$(CONFIG_DIR)"
 	@if echo "$$PATH" | tr ':' '\n' | grep -Fxq "$(BINDIR)"; then \
 		echo "$(BINDIR) is on PATH"; \
@@ -42,10 +57,12 @@ $(VENV)/bin/python: pyproject.toml
 
 sync: $(VENV)/bin/python ## Sync the project environment
 
-install: check-deps ## Install a standalone user-facing runtime
+install: check-install-deps ## Install a standalone user-facing runtime
 	@mkdir -p "$(APP_HOME)"
-	@"$(UV)" venv --allow-existing --python "$(PYTHON_VERSION)" "$(APP_VENV)"
-	@"$(UV)" pip install --python "$(APP_PYTHON)" .
+	@rm -rf "$(APP_VENV)"
+	@"$(STANDALONE_PYTHON)" -m venv "$(APP_VENV)"
+	@"$(APP_PYTHON)" -m pip install --upgrade pip
+	@"$(APP_PYTHON)" -m pip install .
 	@$(MAKE) install-link install-config
 
 install-dev: check-deps sync ## Link the dev environment CLI into ~/.local/bin
@@ -75,10 +92,10 @@ uninstall-agent: ## Stop and remove the macOS LaunchAgent
 	@./scripts/uninstall-launch-agent.sh
 
 restart-agent: install-agent ## Restart the macOS LaunchAgent
-	@launchctl kickstart -k "gui/$$(id -u)/com.marcomc.mac-mqtt-energy"
+	@launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
 agent-status: ## Show the macOS LaunchAgent status
-	@launchctl print "gui/$$(id -u)/com.marcomc.mac-mqtt-energy"
+	@launchctl print "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
 uninstall: ## Remove the standalone runtime and user-facing symlink
 	@rm -f "$(INSTALL_PATH)"

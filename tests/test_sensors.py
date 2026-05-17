@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from mac_mqtt_energy.sensors import parse_ioreg_sample
+from ha_mqtt_agent.sensors import parse_ioreg_sample
 
 
 def test_parse_ioreg_sample_reads_power_and_battery_fields() -> None:

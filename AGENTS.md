@@ -2,15 +2,15 @@
 
 ## Project Identity
 
-- Project name: `Mac MQTT Energy`
-- Python package: `mac_mqtt_energy`
-- Installed CLI: `mac-mqtt-energy`
-- Module entry point: `python -m mac_mqtt_energy`
-- Default user config path: `~/.config/mac-mqtt-energy/config.toml`
-- Default standalone runtime path: `~/.local/share/mac-mqtt-energy/venv`
-- Default user-facing binary path: `~/.local/bin/mac-mqtt-energy`
+- Project name: `Home Assistant MQTT Agent`
+- Python package: `ha_mqtt_agent`
+- Installed CLI: `ha-mqtt-agent`
+- Module entry point: `python -m ha_mqtt_agent`
+- Default user config path: `~/.config/ha-mqtt-agent/config.toml`
+- Default standalone runtime path: `~/.local/share/ha-mqtt-agent/venv`
+- Default user-facing binary path: `~/.local/bin/ha-mqtt-agent`
 - Default macOS service: user LaunchAgent
-  `com.marcomc.mac-mqtt-energy`
+  `com.marcomc.ha-mqtt-agent`
 
 ## New Chat Bootstrap
 
@@ -25,10 +25,10 @@ At the start of every new AI agent chat for this repository, read:
 ## Development Rules
 
 - Keep the project installable as a packaged Python CLI.
-- Keep importable application code under `src/mac_mqtt_energy/`.
+- Keep importable application code under `src/ha_mqtt_agent/`.
 - Keep tests under `tests/`.
 - Prefer focused modules instead of one large `cli.py`.
-- Keep `python -m mac_mqtt_energy` working.
+- Keep `python -m ha_mqtt_agent` working.
 - Preserve the standalone install behavior of `make install`.
 - Preserve the user LaunchAgent behavior of `make install-agent`.
 
@@ -57,6 +57,6 @@ Expected checks:
 When cutting a release, update the version consistently in:
 
 - `pyproject.toml`
-- `src/mac_mqtt_energy/__init__.py`
+- `src/ha_mqtt_agent/__init__.py`
 - `CHANGELOG.md`
 - tests that assert the version string

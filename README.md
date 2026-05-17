@@ -1,4 +1,4 @@
-# Mac MQTT Energy
+# Home Assistant MQTT Agent
 
 ## Table of Contents
 
@@ -19,21 +19,22 @@
 
 ## Overview
 
-`Mac MQTT Energy` publishes local macOS power and battery telemetry to an MQTT
-broker using Home Assistant MQTT discovery.
+`Home Assistant MQTT Agent` publishes local host telemetry to an MQTT broker
+using Home Assistant MQTT discovery.
 
-It reads the local Mac's AppleSmartBattery telemetry, publishes current power in
-watts, keeps a persistent total energy counter in kWh, and exposes battery
-charge, battery maximum capacity, battery temperature, uptime, cycle count, and
-charge status as Home Assistant entities.
+The current provider reads macOS AppleSmartBattery telemetry, publishes current
+power in watts, keeps a persistent total energy counter in kWh, and exposes
+battery charge, battery maximum capacity, battery temperature, uptime, cycle
+count, and charge status as Home Assistant entities. The project name is now
+generic because Linux and Raspberry Pi providers are planned.
 
 The default broker host is `mqtt.example.local:1883`, but every MQTT setting is
 configurable so the tool can be reused with any Home Assistant setup that has
 MQTT discovery enabled.
 
 The current release is telemetry-only. A future command mode can let Home
-Assistant expose buttons and switches for controlled Mac actions without opening
-inbound ports on the Mac.
+Assistant expose buttons and switches for controlled host actions without opening
+inbound ports on the host.
 
 ## Telemetry Flow
 
@@ -43,8 +44,8 @@ energy accumulator, and MQTT publisher.
 ```mermaid
 flowchart LR
   accTitle: Telemetry publishing flow
-  accDescr: Shows how macOS telemetry becomes Home Assistant MQTT entities.
-  ioreg["Read AppleSmartBattery with ioreg"] --> sample["Build telemetry sample"]
+  accDescr: Shows how host telemetry becomes Home Assistant MQTT entities.
+  ioreg["Read telemetry provider"] --> sample["Build telemetry sample"]
   sample --> energy["Update local kWh state"]
   energy --> payload["Build JSON state payload"]
   payload --> mqtt["Publish retained MQTT state"]
@@ -63,17 +64,16 @@ flowchart LR
   status sensors.
 - Battery temperature, battery virtual temperature, and system uptime sensors.
 - Persistent local energy accumulator that survives restarts.
-- Packaged command-line app exposed as `mac-mqtt-energy`.
+- Packaged command-line app exposed as `ha-mqtt-agent`.
 
 ## Requirements
 
 For users:
 
-- Python `3.11`
-- `uv`
+- Python `3.11` or newer
 - `make`
-- macOS with `ioreg`
-- an MQTT broker reachable from the Mac
+- macOS with `ioreg` for the current telemetry provider
+- an MQTT broker reachable from the host
 - Home Assistant MQTT integration with discovery enabled
 
 For maintainers:
@@ -87,17 +87,18 @@ Clone the repository and install the standalone runtime:
 
 ```bash
 git clone <repo-url>
-cd mac-mqtt-energy
+cd ha-mqtt-agent
 make install
 ```
 
 `make install`:
 
 - creates a standalone virtual environment in
-  `~/.local/share/mac-mqtt-energy/venv`
+  `~/.local/share/ha-mqtt-agent/venv`
 - installs the packaged CLI into that standalone runtime
-- links the command to `~/.local/bin/mac-mqtt-energy`
-- installs a config template to `~/.config/mac-mqtt-energy/config.toml` if it
+- does not require `uv` at runtime
+- links the command to `~/.local/bin/ha-mqtt-agent`
+- installs a config template to `~/.config/ha-mqtt-agent/config.toml` if it
   does not exist yet
 
 If `~/.local/bin` is not on your `PATH`, `make check-deps` prints the shell
@@ -110,7 +111,7 @@ make install-agent
 ```
 
 This installs a per-user macOS LaunchAgent named
-`com.marcomc.mac-mqtt-energy`.
+`com.marcomc.ha-mqtt-agent`.
 
 This diagram follows the install targets defined in `Makefile` and the
 LaunchAgent installer script.
@@ -119,9 +120,9 @@ LaunchAgent installer script.
 flowchart LR
   accTitle: Installation workflow
   accDescr: Shows how make install-agent installs the runtime and service.
-  start["Run make install-agent"] --> deps["Check uv, markdownlint, and shellcheck"]
+  start["Run make install-agent"] --> deps["Check Python runtime"]
   deps --> venv["Create or reuse standalone venv"]
-  venv --> package["Install mac-mqtt-energy package"]
+  venv --> package["Install ha-mqtt-agent package"]
   package --> link["Link CLI into ~/.local/bin"]
   link --> config["Install config template if missing"]
   config --> agent["Write LaunchAgent plist"]
@@ -134,14 +135,14 @@ flowchart LR
 make install-dev
 ```
 
-This points `~/.local/bin/mac-mqtt-energy` at the project-local `.venv` so source
+This points `~/.local/bin/ha-mqtt-agent` at the project-local `.venv` so source
 edits are reflected immediately.
 
 ## Configuration
 
 The CLI reads optional config from:
 
-- `~/.config/mac-mqtt-energy/config.toml`
+- `~/.config/ha-mqtt-agent/config.toml`
 - or the file passed with `--config`
 
 Start from the example file in this repository:
@@ -154,12 +155,17 @@ Example:
 ```toml
 mqtt_host = "mqtt.example.local"
 mqtt_port = 1883
-device_id = "work_mac"
-device_name = "Work Mac"
-sample_interval_seconds = 30
-state_path = "~/.local/state/mac-mqtt-energy/state.json"
+device_id = "workstation"
+device_name = "Workstation"
+sample_interval_seconds = 5
+expire_after_seconds = 15
+state_path = "~/.local/state/ha-mqtt-agent/state.json"
 verbose = false
 ```
+
+`sample_interval_seconds` defaults to `5` and may be set as low as `1`.
+`expire_after_seconds` defaults to `15`, so Home Assistant marks sensors
+unavailable after about three missed publishes.
 
 For brokers with authentication, set:
 
@@ -183,26 +189,26 @@ Assistant if you no longer need it.
 Inspect the resolved configuration:
 
 ```bash
-mac-mqtt-energy info
+ha-mqtt-agent info
 ```
 
 Read one local telemetry sample without publishing:
 
 ```bash
-mac-mqtt-energy sample
-mac-mqtt-energy sample --json
+ha-mqtt-agent sample
+ha-mqtt-agent sample --json
 ```
 
 Publish Home Assistant discovery and one state update:
 
 ```bash
-mac-mqtt-energy publish-once
+ha-mqtt-agent publish-once
 ```
 
 Run continuously:
 
 ```bash
-mac-mqtt-energy run
+ha-mqtt-agent run
 ```
 
 ## Home Assistant Entities
@@ -226,6 +232,9 @@ The energy entity is the one to add under Home Assistant's Energy dashboard.
 Home Assistant long-term statistics are fed by the `total_increasing` kWh
 sensor.
 
+Sensors use `expire_after_seconds` in MQTT discovery. The default is `15`, so
+Home Assistant marks them unavailable after about three missed publishes.
+
 CPU, GPU, memory, SSD, palm-rest, Wi-Fi, and fan sensors are not exposed by the
 default LaunchAgent because macOS does not provide those detailed thermal
 channels to this app without a privileged sensor source. The default publisher
@@ -237,25 +246,25 @@ Energy dashboard configuration, see
 
 ## Command and Control Roadmap
 
-This project can grow from a telemetry publisher into a local Mac companion
+This project can grow from a telemetry publisher into a local host companion
 service. The important design point is that MQTT does not require Home Assistant
-to connect directly to the Mac's IP address. The Mac can open one outbound
+to connect directly to the host IP address. The agent can open one outbound
 connection to the MQTT broker, publish sensor state, subscribe to command topics,
 and execute approved local actions when Home Assistant publishes a command.
 
 ```mermaid
 flowchart LR
   accTitle: MQTT command flow
-  accDescr: Shows how Home Assistant can command a Mac without inbound Mac ports.
+  accDescr: Shows how Home Assistant can command a host without inbound ports.
   ha["Home Assistant button"] --> broker["MQTT broker"]
-  broker --> mac["Mac agent subscribed to command topics"]
-  mac --> action["Run approved local action"]
+  broker --> agent["Host agent subscribed to command topics"]
+  agent --> action["Run approved local action"]
   action --> state["Publish result or updated state"]
   state --> broker
   broker --> ha
 ```
 
-The Mac still needs outbound network access to the broker. It does not need SSH,
+The host still needs outbound network access to the broker. It does not need SSH,
 HTTP, or any other inbound listener for MQTT command handling.
 
 ### Home Assistant Entity Model
@@ -296,17 +305,17 @@ Prefer the split-agent model if privileged commands are added. It keeps the
 MQTT-facing process low-privilege and limits the privileged surface to explicit,
 audited operations.
 
-### Candidate Mac Actions
+### Candidate Host Actions
 
 Reasonable first commands:
 
 - Sleep display.
-- Wake display when the Mac is already awake.
+- Wake display when the host is already awake.
 - Lock screen.
 - Start the screen saver.
 - Open an allowlisted application.
 - Quit or restart an allowlisted application.
-- Restart the `mac-mqtt-energy` LaunchAgent.
+- Restart the `ha-mqtt-agent` LaunchAgent.
 - Refresh discovery and publish one immediate telemetry sample.
 - Report command status back to Home Assistant.
 
@@ -325,36 +334,36 @@ Actions to avoid:
 - Accepting command topics with wildcards from untrusted publishers.
 - Retaining command payloads.
 - Treating Home Assistant as proof that a command succeeded without publishing
-  explicit result state from the Mac.
+  explicit result state from the host.
 
 ### Wake-on-LAN
 
-Wake-on-LAN is separate from the Mac MQTT agent. If the Mac is asleep deeply
+Wake-on-LAN is separate from the host MQTT agent. If the host is asleep deeply
 enough that the agent is not connected, MQTT cannot deliver a command to it.
 Home Assistant should send the Wake-on-LAN magic packet directly on the local
-network, using the Mac's Ethernet MAC address where possible.
+network, using the host's Ethernet MAC address where possible.
 
 Wake-on-LAN is best modeled in Home Assistant as:
 
 - a Wake-on-LAN button to send the magic packet;
-- a ping or MQTT availability sensor to show whether the Mac is online;
-- optional MQTT buttons for actions that only work after the Mac is awake.
+- a ping or MQTT availability sensor to show whether the host is online;
+- optional MQTT buttons for actions that only work after the host is awake.
 
 Wake-on-LAN usually depends on local network broadcast behavior, router support,
-macOS energy settings, and whether the Mac keeps the relevant network interface
+host power settings, and whether the host keeps the relevant network interface
 ready during sleep. It is more reliable on wired Ethernet than on Wi-Fi.
 
 ### Security Requirements
 
-MQTT commands are a remote-control interface for the Mac. Before adding them,
+MQTT commands are a remote-control interface for the host. Before adding them,
 use these guardrails:
 
-- Use a dedicated MQTT username for this Mac.
-- Restrict broker ACLs so Home Assistant can publish only this Mac's command
-  topics and the Mac can publish only its state and discovery topics.
+- Use a dedicated MQTT username for this host.
+- Restrict broker ACLs so Home Assistant can publish only this host's command
+  topics and the host can publish only its state and discovery topics.
 - Use TLS when the broker is not fully confined to a trusted local network.
 - Keep command topics under a narrow prefix such as
-  `mac_mqtt_energy/<device_id>/command/<action>`.
+  `ha_mqtt_agent/<device_id>/command/<action>`.
 - Implement an allowlist of named actions with fixed arguments or strict
   argument validation.
 - Publish command acknowledgements, failures, and last-run timestamps.
@@ -369,7 +378,7 @@ Home Assistant's MQTT docs explicitly support `command_topic` for buttons and
 switches, and the Wake-on-LAN integration supports UI buttons for sending magic
 packets. Community Mac companion projects and discussions commonly use this
 pattern for volume control, display sleep, sleep/wake workflows, opening apps,
-restart-style maintenance actions, and Mac status reporting.
+restart-style maintenance actions, and host status reporting.
 
 Useful references:
 
@@ -403,7 +412,7 @@ Restart it:
 make restart-agent
 ```
 
-Use this after editing `~/.config/mac-mqtt-energy/config.toml`; the LaunchAgent
+Use this after editing `~/.config/ha-mqtt-agent/config.toml`; the LaunchAgent
 loads config only when the process starts.
 
 Stop and remove it:
@@ -413,8 +422,8 @@ make uninstall-agent
 ```
 
 The generated plist is written to
-`~/Library/LaunchAgents/com.marcomc.mac-mqtt-energy.plist`. Logs are written to
-`~/Library/Logs/mac-mqtt-energy/`.
+`~/Library/LaunchAgents/com.marcomc.ha-mqtt-agent.plist`. Logs are written to
+`~/Library/Logs/ha-mqtt-agent/`.
 
 This diagram shows the service controls exposed by the `Makefile` and backed by
 the install and uninstall scripts.
@@ -450,7 +459,7 @@ flowchart LR
 │   ├── install.sh
 │   └── uninstall-launch-agent.sh
 ├── src/
-│   └── mac_mqtt_energy/
+│   └── ha_mqtt_agent/
 │       ├── __init__.py
 │       ├── __main__.py
 │       ├── cli.py
@@ -487,7 +496,7 @@ make run
 Before tagging a release:
 
 1. update the version in `pyproject.toml`
-2. update `src/mac_mqtt_energy/__init__.py`
+2. update `src/ha_mqtt_agent/__init__.py`
 3. add release notes to `CHANGELOG.md`
 4. verify `make check`
 

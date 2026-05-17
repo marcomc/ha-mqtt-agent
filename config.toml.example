@@ -1,4 +1,4 @@
-# Copy this file to ~/.config/mac-mqtt-energy/config.toml or pass it with
+# Copy this file to ~/.config/ha-mqtt-agent/config.toml or pass it with
 # --config.
 
 mqtt_host = "mqtt.example.local"
@@ -6,15 +6,17 @@ mqtt_port = 1883
 # mqtt_username = "homeassistant"
 # mqtt_password = "change-me"
 
-mqtt_client_id = "mac-mqtt-energy"
+mqtt_client_id = "ha-mqtt-agent"
 discovery_prefix = "homeassistant"
-topic_prefix = "mac_mqtt_energy"
+topic_prefix = "ha_mqtt_agent"
 
-device_id = "mac"
-device_name = "Mac"
+device_id = "host"
+device_name = "Host"
 
-sample_interval_seconds = 30
+sample_interval_seconds = 5
+# Minimum supported publish interval is 1 second.
+expire_after_seconds = 15
 max_energy_gap_seconds = 300
-state_path = "~/.local/state/mac-mqtt-energy/state.json"
+state_path = "~/.local/state/ha-mqtt-agent/state.json"
 publish_retain = true
 verbose = false

@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-LABEL="com.marcomc.mac-mqtt-energy"
+LABEL="com.marcomc.ha-mqtt-agent"
 PLIST_PATH="${HOME}/Library/LaunchAgents/${LABEL}.plist"
 GUI_DOMAIN="gui/$(id -u)"
 

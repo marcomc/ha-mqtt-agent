@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Mac MQTT Energy config",
+  "title": "Home Assistant MQTT Agent config",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -22,7 +22,7 @@
     },
     "mqtt_client_id": {
       "type": "string",
-      "default": "mac-mqtt-energy"
+      "default": "ha-mqtt-agent"
     },
     "discovery_prefix": {
       "type": "string",
@@ -30,20 +30,25 @@
     },
     "topic_prefix": {
       "type": "string",
-      "default": "mac_mqtt_energy"
+      "default": "ha_mqtt_agent"
     },
     "device_id": {
       "type": "string",
-      "default": "mac"
+      "default": "host"
     },
     "device_name": {
       "type": "string",
-      "default": "Mac"
+      "default": "Host"
     },
     "sample_interval_seconds": {
       "type": "number",
       "minimum": 1,
-      "default": 30
+      "default": 5
+    },
+    "expire_after_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "default": 15
     },
     "max_energy_gap_seconds": {
       "type": "number",
@@ -52,7 +57,7 @@
     },
     "state_path": {
       "type": "string",
-      "default": "~/.local/state/mac-mqtt-energy/state.json"
+      "default": "~/.local/state/ha-mqtt-agent/state.json"
     },
     "publish_retain": {
       "type": "boolean",

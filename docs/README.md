@@ -5,7 +5,7 @@ This scaffold is intentionally opinionated.
 ## User Guides
 
 - [Home Assistant Setup](home-assistant-setup.md): configure MQTT discovery,
-  confirm the Mac device, and add its energy sensor to the Energy dashboard.
+  confirm the host device, and add its energy sensor to the Energy dashboard.
 
 ## Included Defaults
 

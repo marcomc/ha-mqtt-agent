@@ -1,4 +1,4 @@
-"""Module entry point for ``python -m mac_mqtt_energy``."""
+"""Module entry point for ``python -m ha_mqtt_agent``."""
 
 from .cli import main
 

@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mac-mqtt-energy"
+name = "ha-mqtt-agent"
 version = "0.1.0"
-description = "Publish macOS power and energy telemetry to Home Assistant over MQTT discovery."
+description = "Publish local host telemetry to Home Assistant over MQTT discovery."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -24,7 +24,7 @@ dev = [
 ]
 
 [project.scripts]
-mac-mqtt-energy = "mac_mqtt_energy.cli:main"
+ha-mqtt-agent = "ha_mqtt_agent.cli:main"
 
 [tool.setuptools.package-dir]
 "" = "src"

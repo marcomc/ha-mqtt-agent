@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -168,11 +169,12 @@ def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMe
         "payload_available": "online",
         "payload_not_available": "offline",
         "value_template": spec["template"],
+        "expire_after": _expire_after_seconds(config),
         "device": _device_payload(config),
         "origin": {
-            "name": "mac-mqtt-energy",
+            "name": "ha-mqtt-agent",
             "sw": __version__,
-            "url": "https://github.com/marcomc/mac-mqtt-energy",
+            "url": "https://github.com/marcomc/ha-mqtt-agent",
         },
     }
     if "device_class" in spec:
@@ -188,9 +190,13 @@ def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMe
 
 def _device_payload(config: AppConfig) -> dict[str, object]:
     return {
-        "identifiers": [f"mac_mqtt_energy_{config.device_id}"],
+        "identifiers": [f"ha_mqtt_agent_{config.device_id}"],
         "name": config.device_name,
-        "manufacturer": "Apple",
-        "model": "Mac",
+        "manufacturer": "Home Assistant MQTT Agent",
+        "model": "Host",
         "sw_version": __version__,
     }
+
+
+def _expire_after_seconds(config: AppConfig) -> int:
+    return math.ceil(config.expire_after_seconds)

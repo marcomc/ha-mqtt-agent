@@ -6,12 +6,12 @@ from unittest.mock import Mock
 
 import pytest
 
-from mac_mqtt_energy import __version__, cli
-from mac_mqtt_energy.config import AppConfig
+from ha_mqtt_agent import __version__, cli
+from ha_mqtt_agent.config import AppConfig, load_config
 
 
 def test_main_without_args_prints_focused_help(capsys: pytest.CaptureFixture[str]) -> None:
-    expected_usage = "usage: mac-mqtt-energy [--version] [--config PATH] [--verbose] <command>"
+    expected_usage = "usage: ha-mqtt-agent [--version] [--config PATH] [--verbose] <command>"
     result = cli.main([])
 
     captured = capsys.readouterr()
@@ -38,7 +38,7 @@ def test_info_command_reads_config_file(
 ) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        'mqtt_host = "mqtt.example.test"\ndevice_name = "Work Mac"\nverbose = false\n',
+        'mqtt_host = "mqtt.example.test"\ndevice_name = "Workstation"\nverbose = false\n',
         encoding="utf-8",
     )
 
@@ -48,7 +48,7 @@ def test_info_command_reads_config_file(
 
     assert result == 0
     assert "mqtt_host: mqtt.example.test" in captured.out
-    assert "device_name: Work Mac" in captured.out
+    assert "device_name: Workstation" in captured.out
     assert f"config_path: {config_path}" in captured.out
 
 
@@ -65,9 +65,38 @@ def test_info_command_can_emit_json(
 
     assert result == 0
     payload = json.loads(captured.out)
-    assert payload["project_name"] == "Mac MQTT Energy"
-    assert payload["cli_name"] == "mac-mqtt-energy"
+    assert payload["project_name"] == "Home Assistant MQTT Agent"
+    assert payload["cli_name"] == "ha-mqtt-agent"
     assert payload["mqtt_host"] == "mqtt.example.test"
+
+
+def test_config_rejects_sample_interval_below_supported_minimum(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("sample_interval_seconds = 0.5\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="sample_interval_seconds must be at least 1 second"):
+        load_config(config_path)
+
+
+def test_config_reads_expire_after_seconds(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("expire_after_seconds = 5\n", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.expire_after_seconds == 5
+
+
+def test_config_defaults_to_five_second_publish_and_fifteen_second_expiry(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.sample_interval_seconds == 5
+    assert config.expire_after_seconds == 15
 
 
 def test_publish_once_sends_discovery_availability_and_state(
@@ -92,9 +121,9 @@ def test_publish_once_sends_discovery_availability_and_state(
     assert result == 0
     messages = list(publish_mock.call_args.args[1])
     topics = [message.topic for message in messages]
-    assert "homeassistant/sensor/mac_power/config" in topics
-    assert "mac_mqtt_energy/mac/availability" in topics
-    assert "mac_mqtt_energy/mac/state" in topics
+    assert "homeassistant/sensor/host_power/config" in topics
+    assert "ha_mqtt_agent/host/availability" in topics
+    assert "ha_mqtt_agent/host/state" in topics
 
 
 def test_run_keeps_running_after_publish_failure(

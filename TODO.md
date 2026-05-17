@@ -2,9 +2,9 @@
 
 ## Next Steps
 
-- Implement a persistent MQTT command loop for `mac-mqtt-energy run`.
+- Implement a persistent MQTT command loop for `ha-mqtt-agent run`.
   - Keep telemetry publishing active on the same outbound broker connection.
-  - Subscribe only to `mac_mqtt_energy/<device_id>/command/+`.
+  - Subscribe only to `ha_mqtt_agent/<device_id>/command/+`.
   - Ignore retained command messages.
   - Publish command acknowledgements, failures, and last-run timestamps.
 - Add MQTT discovery for safe Home Assistant command entities.
@@ -18,7 +18,7 @@
   - Reject arbitrary shell commands from MQTT payloads.
   - Add structured command logs.
 - Add Home Assistant Wake-on-LAN documentation.
-  - Document the Wake-on-LAN button as a Home Assistant-side action, not a Mac
+  - Document the Wake-on-LAN button as a Home Assistant-side action, not a host
     MQTT command.
   - Document pairing it with ping or MQTT availability state.
   - Call out wired Ethernet as the preferred target for reliable wake.

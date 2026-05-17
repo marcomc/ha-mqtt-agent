@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from mac_mqtt_energy.energy import EnergyAccumulator
+from ha_mqtt_agent.energy import EnergyAccumulator
 
 
 def test_energy_accumulator_integrates_power_between_samples(tmp_path: Path) -> None:

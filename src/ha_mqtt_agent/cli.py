@@ -1,4 +1,4 @@
-"""Command-line interface for Mac MQTT Energy."""
+"""Command-line interface for Home Assistant MQTT Agent."""
 
 from __future__ import annotations
 
@@ -24,9 +24,9 @@ from .sensors import IoregSensorReader
 def format_main_help() -> str:
     return "\n".join(
         [
-            "usage: mac-mqtt-energy [--version] [--config PATH] [--verbose] <command>",
+            "usage: ha-mqtt-agent [--version] [--config PATH] [--verbose] <command>",
             "",
-            "Publish macOS power and energy telemetry to Home Assistant over MQTT discovery.",
+            "Publish local host telemetry to Home Assistant over MQTT discovery.",
             "",
             "Commands:",
             "  info          Show resolved configuration and runtime metadata",
@@ -34,7 +34,7 @@ def format_main_help() -> str:
             "  publish-once  Publish discovery and one telemetry sample",
             "  run           Publish telemetry continuously",
             "",
-            "Run `mac-mqtt-energy <command> --help` for command-specific help.",
+            "Run `ha-mqtt-agent <command> --help` for command-specific help.",
         ]
     )
 
@@ -110,9 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _info_payload(config: AppConfig, config_path: Path) -> dict[str, object]:
     return {
-        "project_name": "Mac MQTT Energy",
-        "cli_name": "mac-mqtt-energy",
-        "package_name": "mac_mqtt_energy",
+        "project_name": "Home Assistant MQTT Agent",
+        "cli_name": "ha-mqtt-agent",
+        "package_name": "ha_mqtt_agent",
         "version": __version__,
         "config_path": str(config_path),
         "config_exists": config_path.exists(),

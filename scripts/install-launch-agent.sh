@@ -1,11 +1,11 @@
 #!/usr/bin/env sh
 set -eu
 
-LABEL="com.marcomc.mac-mqtt-energy"
+LABEL="com.marcomc.ha-mqtt-agent"
 PLIST_DIR="${HOME}/Library/LaunchAgents"
 PLIST_PATH="${PLIST_DIR}/${LABEL}.plist"
-LOG_DIR="${HOME}/Library/Logs/mac-mqtt-energy"
-PROGRAM="${HOME}/.local/bin/mac-mqtt-energy"
+LOG_DIR="${HOME}/Library/Logs/ha-mqtt-agent"
+PROGRAM="${HOME}/.local/bin/ha-mqtt-agent"
 GUI_DOMAIN="gui/$(id -u)"
 
 if [ ! -x "${PROGRAM}" ]; then

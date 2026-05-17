@@ -68,7 +68,7 @@ class IoregSensorReader:
 def parse_ioreg_sample(
     output: str,
     *,
-    host_name: str = "mac",
+    host_name: str = "host",
     uptime_seconds: float | None = None,
 ) -> SensorSample:
     is_charging = _bool_field(output, "IsCharging")
