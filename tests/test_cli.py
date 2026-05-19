@@ -732,3 +732,11 @@ def test_run_keeps_running_after_publish_failure(
     assert "temporary network failure" in captured.err
     assert attempts["count"] == 2
     sleep_mock.assert_called_once_with(30.0)
+
+
+def test_next_publish_delay_caps_without_large_integer_overflow() -> None:
+    config = AppConfig(sample_interval_seconds=5)
+
+    assert cli._next_publish_delay(config, 1) == 30.0
+    assert cli._next_publish_delay(config, 2) == 60.0
+    assert cli._next_publish_delay(config, 10_000) == 300.0

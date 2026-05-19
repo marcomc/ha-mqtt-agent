@@ -732,7 +732,14 @@ def _next_publish_delay(config: AppConfig, failure_count: int) -> float:
     if failure_count <= 0:
         return config.sample_interval_seconds
     initial_delay = max(config.sample_interval_seconds, MIN_PUBLISH_RETRY_SECONDS)
-    return float(min(initial_delay * (2 ** (failure_count - 1)), MAX_PUBLISH_RETRY_SECONDS))
+    if initial_delay >= MAX_PUBLISH_RETRY_SECONDS:
+        return MAX_PUBLISH_RETRY_SECONDS
+    capped_failures = 1
+    delay = initial_delay
+    while capped_failures < failure_count and delay < MAX_PUBLISH_RETRY_SECONDS:
+        delay = min(delay * 2, MAX_PUBLISH_RETRY_SECONDS)
+        capped_failures += 1
+    return float(delay)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
