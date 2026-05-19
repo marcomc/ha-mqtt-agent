@@ -152,7 +152,7 @@ final class LocationAuthorizer: NSObject, CLLocationManagerDelegate {
 
     private func runUntilLocationArrives(timeoutSeconds: TimeInterval) {
         let deadline = Date().addingTimeInterval(timeoutSeconds)
-        while latestLocation == nil && Date() < deadline {
+        while latestLocation == nil && latestLocationError == nil && Date() < deadline {
             RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.1))
         }
     }
