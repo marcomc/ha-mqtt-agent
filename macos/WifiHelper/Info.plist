@@ -21,6 +21,8 @@
   <string>0.1.1</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
+  <key>LSUIElement</key>
+  <true/>
   <key>NSLocationUsageDescription</key>
   <string>Home Assistant MQTT Agent uses the current Wi-Fi network name to publish local Mac network telemetry to your Home Assistant MQTT device.</string>
   <key>NSLocationWhenInUseUsageDescription</key>

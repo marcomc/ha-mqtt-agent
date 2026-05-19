@@ -70,6 +70,10 @@ flowchart LR
   status sensors.
 - Battery temperature, battery virtual temperature, and system uptime sensors.
 - Wi-Fi SSID, Wi-Fi signal in `dBm`, and Wi-Fi signal as a percentage.
+- Wi-Fi BSSID, local IPv4 addresses, default gateway, gateway MAC, and a
+  configurable home-network presence binary sensor.
+- Optional latitude, longitude, location accuracy, and geocoded location
+  sensors.
 - Active wired Ethernet interface count and active interface list.
 - Configurable external ping latency sensors, with Google and Cloudflare DNS
   targets enabled by default.
@@ -236,6 +240,13 @@ ping_timeout_seconds = 1
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 state_path = "~/.local/state/ha-mqtt-agent/state.json"
 verbose = false
+home_ssids = ["Home WiFi", "Home WiFi 5G"]
+home_ipv4_cidrs = ["192.168.1.0/24"]
+home_gateways = ["192.168.1.1"]
+home_bssids = []
+home_gateway_macs = []
+publish_location = false
+location_timeout_seconds = 3
 
 ping_targets = [
   { id = "cloudflare_dns", host = "1.1.1.1", name = "Cloudflare DNS" },
@@ -251,6 +262,9 @@ unavailable after about three missed publishes.
 `network_interval_seconds` defaults to `60`; Wi-Fi, Ethernet, and ping probes
 are cached between those slower network samples while the normal telemetry loop
 keeps publishing. `ping_timeout_seconds` defaults to `1`.
+If `mqtt_client_id` is omitted, the runtime MQTT client ID is derived from
+`device_id`; one-shot publish commands add a short process suffix so they do
+not disconnect the background LaunchAgent while you are debugging.
 
 Each `ping_targets` entry creates a separate Home Assistant latency sensor named
 from its `id`. To configure a longer list quickly, `ping_targets` can also be a
@@ -260,14 +274,35 @@ plain host list, for example:
 ping_targets = ["192.168.1.1", "1.1.1.1", "8.8.8.8", "9.9.9.9"]
 ```
 
+Home-network presence is published as a binary sensor named
+`Home network present`. It turns on when any configured home SSID, BSSID, IPv4
+CIDR, default gateway, or gateway MAC matches the current local network sample.
+Leave lists empty to disable that specific match method.
+
+`publish_location` defaults to `false`. Set it to `true` only when you want this
+Mac to publish latitude, longitude, and horizontal accuracy to Home Assistant.
+Location data uses the same macOS Location Services permission as the Wi-Fi
+helper. The agent publishes both standalone latitude/longitude sensors and an
+MQTT `device_tracker` named `Location` with GPS attributes, so Home Assistant
+can place the Mac on map cards. If macOS temporarily reports that the location
+is unknown after one valid fix has been seen, the agent keeps publishing the
+last known coordinates and marks `Location cached` as on. `Location last seen`
+and the `device_tracker` `last_seen` attribute show when the coordinate was last
+refreshed. `Location error` shows the current CoreLocation error, if any. The
+same setting also enables a `Geocoded location` sensor built from macOS reverse
+geocoding, with address-style attributes such as country, locality, postal code,
+street, areas of interest, and time zone. When the coordinate is cached because
+CoreLocation is temporarily unavailable, the geocoded location is reused only
+with that cached coordinate and is marked with `Geocoded location cached`.
+
 On newer macOS versions, SSID access requires the macOS Location permission for
 the bundled Wi-Fi helper app. Signal strength is still published from the
 fallback user-space probes even before the SSID helper is authorized.
 
 ## Authorizing Wi-Fi SSID Access
 
-macOS treats Wi-Fi SSID and BSSID as location-adjacent data. `make install`
-installs a small signed helper app at:
+macOS treats Wi-Fi SSID, BSSID, and geographic coordinates as location-adjacent
+data. `make install` installs a small signed helper app at:
 
 ```text
 ~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app
@@ -288,8 +323,8 @@ LaunchAgent:
 make restart-agent
 ```
 
-Without that permission, macOS may return `<redacted>` for the SSID while still
-allowing the app to publish Wi-Fi signal strength.
+Without that permission, macOS may return `<redacted>` for the SSID and omit
+BSSID or location while still allowing the app to publish Wi-Fi signal strength.
 
 For brokers with authentication, set:
 
@@ -352,8 +387,19 @@ with these entities:
 - Battery status: `charging`, `charged`, `plugged_in`, or `discharging`.
 - Uptime: system uptime in seconds.
 - Wi-Fi SSID.
+- Wi-Fi BSSID.
 - Wi-Fi signal in `dBm`.
 - Wi-Fi signal percent in `%`.
+- IPv4 addresses.
+- Default gateways.
+- Default gateway interfaces.
+- Gateway MACs.
+- Home network present.
+- Location device tracker for Home Assistant map cards.
+- Latitude, longitude, location accuracy, last seen time, cache state, and
+  location error when `publish_location` is enabled.
+- Geocoded location, geocoded cache state, and geocoded error when
+  `publish_location` is enabled.
 - Ethernet active count.
 - Ethernet active interfaces.
 - One ping latency sensor in `ms` for each configured `ping_targets` entry.

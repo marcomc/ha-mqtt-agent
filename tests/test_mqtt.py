@@ -7,7 +7,13 @@ import pytest
 from paho.mqtt.enums import MQTTErrorCode
 
 from ha_mqtt_agent.config import AppConfig
-from ha_mqtt_agent.mqtt import MqttMessage, discovery_messages, publish_messages, state_message
+from ha_mqtt_agent.mqtt import (
+    MqttMessage,
+    discovery_messages,
+    location_attributes_message,
+    publish_messages,
+    state_message,
+)
 
 
 def test_discovery_messages_define_home_assistant_energy_sensor() -> None:
@@ -59,6 +65,18 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert wifi_percent["unit_of_measurement"] == "%"
     assert wifi_percent["value_template"] == "{{ value_json.wifi_signal_percent }}"
 
+    wifi_bssid = messages["homeassistant/sensor/workstation_wifi_bssid/config"]
+    assert wifi_bssid["value_template"] == "{{ value_json.wifi_bssid }}"
+
+    gateway_macs = messages["homeassistant/sensor/workstation_gateway_macs/config"]
+    assert gateway_macs["value_template"] == "{{ value_json.gateway_macs }}"
+
+    home_network = messages["homeassistant/binary_sensor/workstation_home_network_present/config"]
+    assert home_network["device_class"] == "presence"
+    assert home_network["payload_on"] == "true"
+    assert home_network["payload_off"] == "false"
+    assert home_network["value_template"] == "{{ value_json.home_network_present | tojson }}"
+
     ethernet = messages["homeassistant/sensor/workstation_ethernet_active_interfaces/config"]
     assert ethernet["value_template"] == "{{ value_json.ethernet_active_interfaces }}"
 
@@ -67,14 +85,59 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert ping["unit_of_measurement"] == "ms"
     assert ping["value_template"] == "{{ value_json.ping_cloudflare_dns_ms }}"
 
+    latitude = messages["homeassistant/sensor/workstation_latitude/config"]
+    assert latitude["unit_of_measurement"] == "°"
+    assert latitude["value_template"] == "{{ value_json.latitude }}"
+
+    accuracy = messages["homeassistant/sensor/workstation_location_accuracy/config"]
+    assert accuracy["device_class"] == "distance"
+    assert accuracy["unit_of_measurement"] == "m"
+    assert accuracy["value_template"] == "{{ value_json.location_accuracy_m }}"
+
+    location_error = messages["homeassistant/sensor/workstation_location_error/config"]
+    assert location_error["value_template"] == "{{ value_json.location_error }}"
+
+    location_last_seen = messages["homeassistant/sensor/workstation_location_last_seen/config"]
+    assert location_last_seen["device_class"] == "timestamp"
+    assert location_last_seen["value_template"] == "{{ value_json.location_last_seen }}"
+
+    location_cached = messages["homeassistant/binary_sensor/workstation_location_cached/config"]
+    assert location_cached["value_template"] == "{{ value_json.location_cached | tojson }}"
+
+    geocoded_location = messages["homeassistant/sensor/workstation_geocoded_location/config"]
+    assert geocoded_location["value_template"] == "{{ value_json.geocoded_location }}"
+    assert geocoded_location["json_attributes_topic"] == "ha_mqtt_agent/workstation/state"
+    assert (
+        "'Location': [value_json.latitude, value_json.longitude]"
+        in (geocoded_location["json_attributes_template"])
+    )
+    assert (
+        "'Name': value_json.geocoded_location_name"
+        in (geocoded_location["json_attributes_template"])
+    )
+    assert (
+        "'Country': value_json.geocoded_location_country"
+        in (geocoded_location["json_attributes_template"])
+    )
+
+    location_tracker = messages["homeassistant/device_tracker/workstation_location/config"]
+    assert location_tracker["name"] == "Location"
+    assert location_tracker["unique_id"] == "workstation_location"
+    assert location_tracker["source_type"] == "gps"
+    assert location_tracker["json_attributes_topic"] == (
+        "ha_mqtt_agent/workstation/location/attributes"
+    )
+    assert location_tracker["availability_topic"] == "ha_mqtt_agent/workstation/availability"
+
 
 def test_discovery_messages_expire_entities_after_configured_window() -> None:
     config = AppConfig(device_id="workstation", expire_after_seconds=15)
 
     messages = [json.loads(message.payload) for message in discovery_messages(config)]
+    expiring_messages = [message for message in messages if "expire_after" in message]
 
-    assert messages
-    assert {message["expire_after"] for message in messages} == {15}
+    assert expiring_messages
+    assert {message["expire_after"] for message in expiring_messages} == {15}
 
 
 def test_state_message_uses_compact_json_and_configured_topic() -> None:
@@ -84,6 +147,63 @@ def test_state_message_uses_compact_json_and_configured_topic() -> None:
 
     assert message.topic == "ha_mqtt_agent/workstation/state"
     assert json.loads(message.payload) == {"energy_kwh": 0.01, "power_w": 12.5}
+
+
+def test_location_attributes_message_uses_home_assistant_tracker_attribute_names() -> None:
+    config = AppConfig(device_id="workstation")
+
+    message = location_attributes_message(
+        config,
+        {
+            "latitude": 45.4642,
+            "longitude": 9.19,
+            "location_accuracy_m": 35.0,
+            "location_cached": True,
+            "location_last_seen": "2026-05-17T10:00:00+00:00",
+            "location_error": "The operation could not be completed.",
+        },
+    )
+
+    assert message is not None
+    assert message.topic == "ha_mqtt_agent/workstation/location/attributes"
+    assert json.loads(message.payload) == {
+        "gps_accuracy": 35.0,
+        "latitude": 45.4642,
+        "last_seen": "2026-05-17T10:00:00+00:00",
+        "location_cached": True,
+        "location_error": "The operation could not be completed.",
+        "location_last_seen": "2026-05-17T10:00:00+00:00",
+        "longitude": 9.19,
+    }
+
+
+def test_location_attributes_message_is_skipped_without_coordinates() -> None:
+    config = AppConfig(device_id="workstation")
+
+    message = location_attributes_message(config, {"latitude": None, "longitude": None})
+
+    assert message is None
+
+
+def test_publish_messages_uses_derived_client_id_with_suffix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    def client_factory(*args: object, **kwargs: object) -> _FakeClient:
+        _ = args
+        captured["client_id"] = str(kwargs["client_id"])
+        return _FakeClient()
+
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", client_factory)
+
+    publish_messages(
+        AppConfig(device_id="workstation"),
+        [],
+        client_id_suffix="-manual-123",
+    )
+
+    assert captured["client_id"] == "ha-mqtt-agent-workstation-manual-123"
 
 
 def test_publish_messages_raises_on_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:

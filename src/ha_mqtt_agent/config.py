@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tomllib
 from dataclasses import dataclass, replace
+from ipaddress import ip_network
 from pathlib import Path
 from typing import Any, SupportsFloat, SupportsIndex
 
@@ -23,6 +24,7 @@ DEFAULT_WIFI_HELPER_PATH = (
 MIN_SAMPLE_INTERVAL_SECONDS = 1.0
 MIN_NETWORK_INTERVAL_SECONDS = 1.0
 MIN_PING_TIMEOUT_SECONDS = 0.1
+MIN_LOCATION_TIMEOUT_SECONDS = 0.1
 
 
 @dataclass(frozen=True)
@@ -46,7 +48,7 @@ class AppConfig:
     mqtt_port: int = 1883
     mqtt_username: str | None = None
     mqtt_password: str | None = None
-    mqtt_client_id: str = "ha-mqtt-agent"
+    mqtt_client_id: str | None = None
     discovery_prefix: str = "homeassistant"
     topic_prefix: str = "ha_mqtt_agent"
     device_id: str = "host"
@@ -58,6 +60,13 @@ class AppConfig:
     ping_timeout_seconds: float = 1.0
     ping_targets: tuple[PingTarget, ...] = DEFAULT_PING_TARGETS
     wifi_helper_path: Path = DEFAULT_WIFI_HELPER_PATH
+    home_ssids: tuple[str, ...] = ()
+    home_ipv4_cidrs: tuple[str, ...] = ()
+    home_gateways: tuple[str, ...] = ()
+    home_bssids: tuple[str, ...] = ()
+    home_gateway_macs: tuple[str, ...] = ()
+    publish_location: bool = False
+    location_timeout_seconds: float = 3.0
     state_path: Path = DEFAULT_STATE_PATH
     publish_retain: bool = True
     verbose: bool = False
@@ -68,12 +77,20 @@ class AppConfig:
         return replace(self, verbose=True)
 
     @property
+    def resolved_mqtt_client_id(self) -> str:
+        return self.mqtt_client_id or f"ha-mqtt-agent-{self.device_id}"
+
+    @property
     def state_topic(self) -> str:
         return f"{self.topic_prefix}/{self.device_id}/state"
 
     @property
     def availability_topic(self) -> str:
         return f"{self.topic_prefix}/{self.device_id}/availability"
+
+    @property
+    def location_attributes_topic(self) -> str:
+        return f"{self.topic_prefix}/{self.device_id}/location/attributes"
 
 
 def _read_toml(path: Path) -> dict[str, Any]:
@@ -93,7 +110,7 @@ def load_config(path: Path) -> AppConfig:
         mqtt_port=int(data.get("mqtt_port", 1883)),
         mqtt_username=_optional_str(data.get("mqtt_username")),
         mqtt_password=_optional_str(data.get("mqtt_password")),
-        mqtt_client_id=str(data.get("mqtt_client_id", "ha-mqtt-agent")),
+        mqtt_client_id=_optional_str(data.get("mqtt_client_id")),
         discovery_prefix=str(data.get("discovery_prefix", "homeassistant")),
         topic_prefix=str(data.get("topic_prefix", "ha_mqtt_agent")).strip("/"),
         device_id=str(data.get("device_id", "host")),
@@ -127,6 +144,20 @@ def load_config(path: Path) -> AppConfig:
         wifi_helper_path=Path(
             str(data.get("wifi_helper_path", DEFAULT_WIFI_HELPER_PATH))
         ).expanduser(),
+        home_ssids=_parse_string_list(data.get("home_ssids", ()), key="home_ssids"),
+        home_ipv4_cidrs=_parse_ipv4_cidrs(data.get("home_ipv4_cidrs", ())),
+        home_gateways=_parse_string_list(data.get("home_gateways", ()), key="home_gateways"),
+        home_bssids=_parse_mac_list(data.get("home_bssids", ()), key="home_bssids"),
+        home_gateway_macs=_parse_mac_list(
+            data.get("home_gateway_macs", ()),
+            key="home_gateway_macs",
+        ),
+        publish_location=bool(data.get("publish_location", False)),
+        location_timeout_seconds=_float_at_least(
+            data.get("location_timeout_seconds", 3.0),
+            minimum=MIN_LOCATION_TIMEOUT_SECONDS,
+            key="location_timeout_seconds",
+        ),
         state_path=Path(str(data.get("state_path", DEFAULT_STATE_PATH))).expanduser(),
         publish_retain=bool(data.get("publish_retain", True)),
         verbose=bool(data.get("verbose", False)),
@@ -163,6 +194,34 @@ def _parse_ping_targets(value: object) -> tuple[PingTarget, ...]:
     if len(ids) != len(set(ids)):
         raise ValueError("ping_targets ids must be unique.")
     return targets
+
+
+def _parse_string_list(value: object, *, key: str) -> tuple[str, ...]:
+    if isinstance(value, tuple):
+        return value
+    if not isinstance(value, list):
+        raise TypeError(f"{key} must be a list of strings.")
+
+    items = tuple(str(item).strip() for item in value)
+    if any(not item for item in items):
+        raise ValueError(f"{key} entries must not be empty.")
+    return items
+
+
+def _parse_ipv4_cidrs(value: object) -> tuple[str, ...]:
+    cidrs = _parse_string_list(value, key="home_ipv4_cidrs")
+    for cidr in cidrs:
+        ip_network(cidr, strict=False)
+    return cidrs
+
+
+def _parse_mac_list(value: object, *, key: str) -> tuple[str, ...]:
+    items = _parse_string_list(value, key=key)
+    normalized = tuple(item.lower() for item in items)
+    for item in normalized:
+        if not re.fullmatch(r"[0-9a-f]{2}(:[0-9a-f]{2}){5}", item):
+            raise ValueError(f"{key} entries must be colon-separated MAC addresses.")
+    return normalized
 
 
 def _parse_ping_target(value: object) -> PingTarget:
