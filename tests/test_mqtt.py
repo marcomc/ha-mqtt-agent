@@ -224,7 +224,30 @@ def test_publish_messages_uses_derived_client_id_with_suffix(
         client_id_suffix="-manual-123",
     )
 
-    assert captured["client_id"] == "ha-mqtt-agent-workstation-manual-123"
+    assert captured["client_id"] == "ha-mqtt-agent-d67a39a1"
+    assert len(captured["client_id"].encode("utf-8")) <= 23
+
+
+def test_publish_messages_keeps_manual_client_id_with_suffix_broker_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    def client_factory(*args: object, **kwargs: object) -> _FakeClient:
+        _ = args
+        captured["client_id"] = str(kwargs["client_id"])
+        return _FakeClient()
+
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", client_factory)
+
+    publish_messages(
+        AppConfig(device_id="host"),
+        [],
+        client_id_suffix="-manual-12345",
+    )
+
+    assert captured["client_id"] == "ha-mqtt-agent-82a37b77"
+    assert len(captured["client_id"].encode("utf-8")) <= 23
 
 
 def test_publish_messages_raises_on_connect_failure(monkeypatch: pytest.MonkeyPatch) -> None:

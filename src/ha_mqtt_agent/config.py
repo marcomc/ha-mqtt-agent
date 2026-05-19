@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tomllib
 from dataclasses import dataclass, replace
+from hashlib import sha1
 from ipaddress import ip_network
 from pathlib import Path
 from typing import Any, SupportsFloat, SupportsIndex
@@ -25,6 +26,7 @@ MIN_SAMPLE_INTERVAL_SECONDS = 1.0
 MIN_NETWORK_INTERVAL_SECONDS = 1.0
 MIN_PING_TIMEOUT_SECONDS = 0.1
 MIN_LOCATION_TIMEOUT_SECONDS = 0.1
+MQTT_CLIENT_ID_MAX_BYTES = 23
 
 
 @dataclass(frozen=True)
@@ -78,7 +80,12 @@ class AppConfig:
 
     @property
     def resolved_mqtt_client_id(self) -> str:
-        return self.mqtt_client_id or f"ha-mqtt-agent-{self.device_id}"
+        return self.mqtt_client_id or _bounded_mqtt_client_id(f"ha-mqtt-agent-{self.device_id}")
+
+    def resolved_mqtt_client_id_with_suffix(self, suffix: str) -> str:
+        if not suffix:
+            return self.resolved_mqtt_client_id
+        return _bounded_mqtt_client_id(f"{self.resolved_mqtt_client_id}{suffix}")
 
     @property
     def state_topic(self) -> str:
@@ -169,6 +176,13 @@ def _optional_str(value: object) -> str | None:
         return None
     text = str(value)
     return text or None
+
+
+def _bounded_mqtt_client_id(value: str) -> str:
+    if len(value.encode("utf-8")) <= MQTT_CLIENT_ID_MAX_BYTES:
+        return value
+    digest = sha1(value.encode("utf-8")).hexdigest()[:8]
+    return f"ha-mqtt-agent-{digest}"
 
 
 def _float_at_least(value: object, *, minimum: float, key: str) -> float:

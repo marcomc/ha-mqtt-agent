@@ -356,7 +356,7 @@ def publish_messages(
 ) -> None:
     client = mqtt.Client(
         CallbackAPIVersion.VERSION2,
-        client_id=f"{config.resolved_mqtt_client_id}{client_id_suffix}",
+        client_id=config.resolved_mqtt_client_id_with_suffix(client_id_suffix),
     )
     if config.mqtt_username is not None:
         client.username_pw_set(config.mqtt_username, config.mqtt_password)

@@ -81,7 +81,17 @@ def test_config_derives_default_mqtt_client_id_from_device_id(tmp_path: Path) ->
 
     config = load_config(config_path)
 
-    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-workstation"
+    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-3137781d"
+    assert len(config.resolved_mqtt_client_id.encode("utf-8")) <= 23
+
+
+def test_config_keeps_short_default_mqtt_client_id_readable(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('device_id = "host"\n', encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-host"
 
 
 def test_config_keeps_explicit_mqtt_client_id(tmp_path: Path) -> None:
