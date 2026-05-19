@@ -18,10 +18,7 @@ if ! command -v make >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "python3 not found. Install Python 3.11 or newer, then rerun this script." >&2
-  exit 1
-fi
+STANDALONE_PYTHON=${STANDALONE_PYTHON:-$(./scripts/find-standalone-python.sh)}
 
 if ! command -v swiftc >/dev/null 2>&1; then
   echo "swiftc not found. Install Xcode Command Line Tools, then rerun this script." >&2
@@ -35,12 +32,7 @@ if ! command -v codesign >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' || {
-  echo "python3 must be version 3.11 or newer." >&2
-  exit 1
-}
-
-make install-agent
+make install-agent STANDALONE_PYTHON="${STANDALONE_PYTHON}"
 
 echo
 echo "Installed Home Assistant MQTT Agent."

@@ -377,7 +377,8 @@ Temporary broker or network failures are retried by the service loop.
   xcode-select --install
   ```
 
-- Install Python 3.11 or newer if `python3` is missing or too old.
+- Install Python 3.11 or newer if no compatible `python3.14`, `python3.13`,
+  `python3.12`, `python3.11`, `uv`-managed Python, or `python3` is available.
 
 ### CPU, GPU, fan, or SSD temperatures are missing
 

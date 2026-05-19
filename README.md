@@ -145,7 +145,9 @@ Developer ID signed, notarized installer for non-developer users.
 
 `./scripts/install.sh` and `make install-agent` expect local build tools:
 
-- Python `3.11` or newer for the packaged CLI runtime.
+- Python `3.11` or newer for the packaged CLI runtime. The installer
+  auto-detects a compatible `python3.14`, `python3.13`, `python3.12`,
+  `python3.11`, or `uv`-managed Python before falling back to `python3`.
 - `make` to run the project install targets.
 - `swiftc` to compile the Wi-Fi SSID helper app.
 - `codesign` to apply the helper's local ad-hoc signature.
@@ -167,6 +169,13 @@ After installing the command line tools, rerun:
 
 ```bash
 ./scripts/install.sh
+```
+
+If more than one Python is installed, you can still force the standalone runtime
+interpreter:
+
+```bash
+make restart-agent STANDALONE_PYTHON=/path/to/python3.12
 ```
 
 ### Future Prebuilt Install
