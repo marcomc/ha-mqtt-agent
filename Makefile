@@ -102,7 +102,7 @@ install-agent: install ## Install and start the macOS LaunchAgent
 uninstall-agent: ## Stop and remove the macOS LaunchAgent
 	@./scripts/uninstall-launch-agent.sh
 
-restart-agent: install-agent ## Restart the macOS LaunchAgent
+restart-agent: ## Restart the already installed macOS LaunchAgent
 	@launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
 agent-status: ## Show the macOS LaunchAgent status
