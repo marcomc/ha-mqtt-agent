@@ -438,6 +438,76 @@ def test_sample_payload_reverse_geocodes_cached_location_when_address_cache_is_m
     ]
 
 
+def test_sample_payload_does_not_reverse_geocode_cached_location_in_read_only_mode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    helper_path = tmp_path / "HaMqttAgentWifiHelper"
+    helper_path.write_text("", encoding="utf-8")
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "energy_kwh": 0,
+                "last_location": {
+                    "latitude": 45.4642,
+                    "longitude": 9.19,
+                    "accuracy_m": 35.0,
+                    "timestamp": "2026-05-17T10:00:00+00:00",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        state_path=state_path,
+        publish_location=True,
+        wifi_helper_path=helper_path,
+    )
+    reader = Mock()
+    reader.read.return_value = SensorSample(
+        timestamp=datetime(2026, 5, 17, 10, 1, tzinfo=UTC),
+        host_name="macbook",
+        uptime_seconds=123,
+        power_w=12.5,
+        battery_percent=80,
+        battery_max_capacity_percent=90,
+        battery_max_capacity_mah=4500,
+        battery_design_capacity_mah=5000,
+        battery_reported_max_capacity_percent=100,
+        battery_temperature_c=32.5,
+        battery_virtual_temperature_c=33.5,
+        battery_cycle_count=20,
+        battery_status="charging",
+        external_power=True,
+    )
+    network_reader = Mock()
+    network_reader.read.return_value = NetworkSample(
+        wifi=WifiStatus(
+            interface="en0",
+            ssid="Office",
+            signal_dbm=-55,
+            signal_percent=90,
+        ),
+        ethernet=(),
+        pings=(),
+        location=LocationStatus(error="The operation could not be completed."),
+    )
+    run_helper = Mock()
+    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
+    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    monkeypatch.setattr(cli, "_run_wifi_helper_for_cli", run_helper)
+
+    payload = cli._sample_payload(config, update_energy=False)
+
+    assert payload["latitude"] == 45.4642
+    assert payload["longitude"] == 9.19
+    assert payload["location_cached"] is True
+    assert payload["geocoded_location"] is None
+    assert payload["geocoded_location_cached"] is False
+    run_helper.assert_not_called()
+
+
 def test_sample_payload_persists_fresh_location_for_later_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

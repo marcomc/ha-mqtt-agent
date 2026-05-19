@@ -424,7 +424,9 @@ def _apply_geocoded_location_cache(
         return
 
     cached = _read_last_geocoded_location(config.state_path)
-    generated = cached or _reverse_geocode_cached_location(config, payload, timestamp=timestamp)
+    generated = cached
+    if generated is None and persist:
+        generated = _reverse_geocode_cached_location(config, payload, timestamp=timestamp)
     if generated is None:
         return
 
