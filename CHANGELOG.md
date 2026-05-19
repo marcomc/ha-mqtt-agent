@@ -29,6 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   telemetry sampling until after the broker connection succeeds.
 - One-shot publish commands now use a process-specific MQTT client ID suffix so
   debugging does not disconnect the background LaunchAgent.
+- Optional Wi-Fi and location diagnostic sensors now publish stable text states
+  instead of becoming `unknown` when macOS reports no BSSID or no current error.
 
 ## [0.1.0] - 2026-05-19
 

@@ -66,7 +66,9 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert wifi_percent["value_template"] == "{{ value_json.wifi_signal_percent }}"
 
     wifi_bssid = messages["homeassistant/sensor/workstation_wifi_bssid/config"]
-    assert wifi_bssid["value_template"] == "{{ value_json.wifi_bssid }}"
+    assert wifi_bssid["value_template"] == (
+        "{{ value_json.wifi_bssid if value_json.wifi_bssid is not none else 'not_available' }}"
+    )
 
     gateway_macs = messages["homeassistant/sensor/workstation_gateway_macs/config"]
     assert gateway_macs["value_template"] == "{{ value_json.gateway_macs }}"
@@ -116,7 +118,9 @@ def test_discovery_messages_define_location_entities_when_location_is_enabled() 
     assert accuracy["value_template"] == "{{ value_json.location_accuracy_m }}"
 
     location_error = messages["homeassistant/sensor/workstation_location_error/config"]
-    assert location_error["value_template"] == "{{ value_json.location_error }}"
+    assert location_error["value_template"] == (
+        "{{ value_json.location_error if value_json.location_error is not none else 'none' }}"
+    )
 
     location_last_seen = messages["homeassistant/sensor/workstation_location_last_seen/config"]
     assert location_last_seen["device_class"] == "timestamp"
@@ -149,6 +153,14 @@ def test_discovery_messages_define_location_entities_when_location_is_enabled() 
         "ha_mqtt_agent/workstation/location/attributes"
     )
     assert location_tracker["availability_topic"] == "ha_mqtt_agent/workstation/availability"
+
+    geocoded_location_error = messages[
+        "homeassistant/sensor/workstation_geocoded_location_error/config"
+    ]
+    assert geocoded_location_error["value_template"] == (
+        "{{ value_json.geocoded_location_error if "
+        "value_json.geocoded_location_error is not none else 'none' }}"
+    )
 
 
 def test_discovery_messages_expire_entities_after_configured_window() -> None:

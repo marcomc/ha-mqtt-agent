@@ -126,7 +126,10 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "object": "wifi_bssid",
             "name": "Wi-Fi BSSID",
             "unique": "wifi_bssid",
-            "template": "{{ value_json.wifi_bssid }}",
+            "template": (
+                "{{ value_json.wifi_bssid if value_json.wifi_bssid is not none "
+                "else 'not_available' }}"
+            ),
         },
         {
             "object": "wifi_signal_dbm",
@@ -245,7 +248,10 @@ def _location_sensor_specs() -> list[dict[str, str]]:
             "object": "location_error",
             "name": "Location error",
             "unique": "location_error",
-            "template": "{{ value_json.location_error }}",
+            "template": (
+                "{{ value_json.location_error if value_json.location_error is not none "
+                "else 'none' }}"
+            ),
         },
         {
             "object": "geocoded_location",
@@ -280,7 +286,10 @@ def _location_sensor_specs() -> list[dict[str, str]]:
             "object": "geocoded_location_error",
             "name": "Geocoded location error",
             "unique": "geocoded_location_error",
-            "template": "{{ value_json.geocoded_location_error }}",
+            "template": (
+                "{{ value_json.geocoded_location_error if "
+                "value_json.geocoded_location_error is not none else 'none' }}"
+            ),
         },
     ]
 
