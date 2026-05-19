@@ -37,14 +37,14 @@ The current release is telemetry-only.
 
 ## Runtime Flow
 
-This is the runtime path after `make install-agent` installs and starts the
+This is the runtime path after `make install` installs and starts the
 per-user LaunchAgent.
 
 ```mermaid
 flowchart LR
   accTitle: Runtime telemetry flow
   accDescr: Shows how the LaunchAgent publishes Mac telemetry to Home Assistant through MQTT.
-  install["make install-agent"] --> plist["Write LaunchAgent plist"]
+  install["make install"] --> plist["Write LaunchAgent plist"]
   plist --> launchd["macOS launchd starts ha-mqtt-agent run"]
   launchd --> battery["Read AppleSmartBattery telemetry"]
   launchd --> network["Read network telemetry"]
@@ -111,7 +111,7 @@ cd ha-mqtt-agent
 ./scripts/install.sh
 ```
 
-The script is a user-friendly wrapper around `make install-agent`. It checks the
+The script is a user-friendly wrapper around `make install`. It checks the
 local prerequisites, installs the standalone runtime, creates the config
 template if needed, and starts the per-user LaunchAgent.
 
@@ -143,7 +143,7 @@ Developer ID signed, notarized installer for non-developer users.
 
 ### Current Source Install
 
-`./scripts/install.sh` and `make install-agent` expect local build tools:
+`./scripts/install.sh` and `make install` expect local build tools:
 
 - Python `3.11` or newer for the packaged CLI runtime. The installer
   auto-detects a compatible `python3.14`, `python3.13`, `python3.12`,
@@ -189,16 +189,17 @@ The backlog item is tracked as [HMA-009](TODO.md#hma-009-prebuilt-notarized-maco
 
 ## Installation
 
-For scripted installs, use the Make target directly:
+For the complete install, use the Make target directly:
 
 ```bash
-make install-agent
+make install
 ```
 
-`make install-agent`:
+`make install`:
 
 - builds the Wi-Fi SSID helper app from `macos/WifiHelper/`
 - signs the helper locally with an ad-hoc signature and the Location entitlement
+- asks macOS to authorize the helper for Wi-Fi SSID access
 - creates a standalone virtual environment in
   `~/.local/share/ha-mqtt-agent/venv`
 - installs the packaged CLI into that standalone runtime
@@ -207,6 +208,9 @@ make install-agent
 - installs a config template to `~/.config/ha-mqtt-agent/config.toml` if it
   does not exist yet
 - installs and starts the per-user macOS LaunchAgent
+
+Use `make install-cli` only when you want the standalone CLI runtime without
+installing the config, Wi-Fi helper, or LaunchAgent.
 
 If `~/.local/bin` is not on your `PATH`, `make check-deps` prints the shell
 snippet to add it.
@@ -325,16 +329,19 @@ data. `make install` installs a small signed helper app at:
 ~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app
 ```
 
-Run this once from the logged-in Mac session:
+`make install` runs the authorization command automatically after
+installing the helper. Approve the Location Services prompt for **Home
+Assistant MQTT Agent Wi-Fi Helper** when it appears.
+
+If the prompt does not appear, or if the helper was rebuilt after macOS had
+already recorded an older local signature, run:
 
 ```bash
 ha-mqtt-agent authorize-wifi
 ```
 
-Approve the Location Services prompt for **Home Assistant MQTT Agent Wi-Fi
-Helper**. If the prompt does not appear, open **System Settings > Privacy &
-Security > Location Services** and enable that helper there, then restart the
-LaunchAgent:
+Then open **System Settings > Privacy & Security > Location Services** and
+enable that helper there if needed, then restart the LaunchAgent:
 
 ```bash
 make restart-agent
@@ -446,7 +453,7 @@ the user's home directory, and does not need root privileges.
 Install and start it:
 
 ```bash
-make install-agent
+make install
 ```
 
 Check it:

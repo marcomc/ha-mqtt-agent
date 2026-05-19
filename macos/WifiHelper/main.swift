@@ -243,7 +243,10 @@ func currentWifiSnapshot(
     geocodeTimeoutSeconds: TimeInterval?
 ) -> WifiSnapshot {
     let status = authorizer.authorizationStatus()
-    let authorized = isAuthorized(status)
+    let wifiInterface = CWWiFiClient.shared().interface()
+    let ssid = wifiInterface?.ssid()
+    let bssid = wifiInterface?.bssid()
+    let authorized = isAuthorized(status) || nonEmpty(ssid) != nil || nonEmpty(bssid) != nil
     let location = locationTimeoutSeconds.flatMap { authorizer.currentLocation(timeoutSeconds: $0) }
     let geocodedLocation = location.flatMap { currentLocation in
         geocodeTimeoutSeconds.map {
@@ -269,7 +272,7 @@ func currentWifiSnapshot(
         )
     }
 
-    guard let interface = CWWiFiClient.shared().interface() else {
+    guard let interface = wifiInterface else {
         return WifiSnapshot(
             authorized: true,
             authorizationStatus: statusName(status),
@@ -291,8 +294,8 @@ func currentWifiSnapshot(
         authorized: true,
         authorizationStatus: statusName(status),
         interface: interface.interfaceName,
-        ssid: interface.ssid(),
-        bssid: interface.bssid(),
+        ssid: ssid,
+        bssid: bssid,
         signalDbm: interface.rssiValue(),
         noiseDbm: interface.noiseMeasurement(),
         latitude: location?.coordinate.latitude,

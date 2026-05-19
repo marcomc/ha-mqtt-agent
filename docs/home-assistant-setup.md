@@ -123,7 +123,7 @@ unavailable after about three missed publishes.
 `network_interval_seconds` defaults to `60`; Wi-Fi, Ethernet, and external ping
 checks are cached between these network samples. Each `ping_targets` entry gets
 its own Home Assistant latency sensor. `wifi_helper_path` points to the bundled
-helper app installed by `make install-agent`.
+helper app installed by `make install`.
 
 The `home_*` lists drive the `Home network present` binary sensor. It turns on
 when any configured SSID, BSSID, IPv4 CIDR, gateway address, or gateway MAC
@@ -269,8 +269,12 @@ Assistant dashboards. They are not Energy dashboard inputs.
 ## Step 6: Authorize Wi-Fi SSID Access
 
 macOS treats Wi-Fi SSID, BSSID, and geographic coordinates as location-adjacent
-data. Run the
-authorization helper once from the logged-in Mac session:
+data. `make install` runs the authorization helper from the logged-in Mac
+session after installing the Wi-Fi helper app.
+
+Approve the Location Services prompt for **Home Assistant MQTT Agent Wi-Fi
+Helper**. If macOS does not show a prompt, or if the helper was rebuilt after
+macOS had already recorded an older local signature, run:
 
 ```bash
 ha-mqtt-agent authorize-wifi
@@ -283,8 +287,8 @@ read-only Wi-Fi helper path.
 flowchart LR
   accTitle: Wi-Fi SSID authorization flow
   accDescr: Shows how the helper gains Location permission and feeds SSID telemetry.
-  install["make install-agent"] --> helper["Install Wi-Fi helper app"]
-  helper --> command["Run ha-mqtt-agent authorize-wifi"]
+  install["make install"] --> helper["Install Wi-Fi helper app"]
+  helper --> command["Run authorize-wifi"]
   command --> prompt{"Location prompt approved?"}
   prompt -->|Yes| corewlan["Helper reads SSID with CoreWLAN"]
   prompt -->|No| redacted["SSID may stay redacted"]
@@ -292,10 +296,8 @@ flowchart LR
   redacted --> signal["Agent still publishes signal and ping"]
 ```
 
-Approve the Location Services prompt for **Home Assistant MQTT Agent Wi-Fi
-Helper**. If macOS does not show a prompt, open **System Settings > Privacy &
-Security > Location Services**, enable that helper there, and then restart the
-LaunchAgent.
+Then open **System Settings > Privacy & Security > Location Services**, enable
+that helper there if needed, and restart the LaunchAgent.
 
 Without this permission, macOS may publish the SSID as `<redacted>` and omit
 BSSID or location, while signal strength and ping sensors continue to work.
@@ -305,7 +307,7 @@ BSSID or location, while signal strength and ping sensors continue to work.
 Install or restart the per-user LaunchAgent:
 
 ```bash
-make install-agent
+make install
 ```
 
 Check service status:

@@ -101,7 +101,7 @@ Add a non-developer install path for public releases.
 - Notarize and staple the helper or installer before publishing.
 - Package the Python runtime, LaunchAgent plist, config template, and helper in
   a release artifact.
-- Keep `./scripts/install.sh` and `make install-agent` as the source install
+- Keep `./scripts/install.sh` and `make install` as the source install
   path for users with local build tools.
 - Document how to verify the release signature, notarization status, and
   installed LaunchAgent.

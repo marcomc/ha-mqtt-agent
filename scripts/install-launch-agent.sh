@@ -10,7 +10,7 @@ GUI_DOMAIN="gui/$(id -u)"
 
 if [ ! -x "${PROGRAM}" ]; then
   echo "Missing executable at ${PROGRAM}" >&2
-  echo "Run 'make install' first." >&2
+  echo "Run 'make install-cli' first." >&2
   exit 1
 fi
 
@@ -18,6 +18,12 @@ mkdir -p "${PLIST_DIR}" "${LOG_DIR}"
 
 if launchctl print "${GUI_DOMAIN}/${LABEL}" >/dev/null 2>&1; then
   launchctl bootout "${GUI_DOMAIN}/${LABEL}"
+fi
+
+echo "Authorizing Wi-Fi helper for SSID access..."
+if ! "${PROGRAM}" authorize-wifi; then
+  echo "Wi-Fi SSID authorization did not complete." >&2
+  echo "Run '${PROGRAM} authorize-wifi' from the logged-in Mac session, then restart the agent." >&2
 fi
 
 cat >"${PLIST_PATH}" <<EOF
