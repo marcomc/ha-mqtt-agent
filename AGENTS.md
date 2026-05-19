@@ -48,7 +48,9 @@ Expected checks:
 ## Documentation Rules
 
 - Keep `README.md` accurate for end users.
-- Keep `CHANGELOG.md` updated in `Unreleased` for user-visible changes.
+- Keep `CHANGELOG.md` updated in the next dated release section for
+  user-visible changes. Do not leave release headings undated unless the user
+  explicitly asks for a holding section.
 - Remove completed items from `TODO.md` when they ship.
 - Update config documentation when adding or changing config keys.
 - Keep read-only CLI commands such as `info` and `sample` free of persistent
@@ -65,5 +67,6 @@ When cutting a release, update the version consistently in:
 
 - `pyproject.toml`
 - `src/ha_mqtt_agent/__init__.py`
+- `macos/WifiHelper/Info.plist`
 - `CHANGELOG.md`
 - tests that assert the version string
