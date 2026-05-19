@@ -30,6 +30,7 @@ cp "${INFO_PLIST_SOURCE}" "${INFO_PLIST_TARGET}"
   "${SOURCE_PATH}" \
   -framework CoreLocation \
   -framework CoreWLAN \
+  -framework MapKit \
   -o "${MACOS_DIR}/${EXECUTABLE_NAME}"
 
 plutil -lint "${INFO_PLIST_TARGET}" >/dev/null

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -36,3 +37,32 @@ def test_energy_accumulator_resets_unreadable_state(tmp_path: Path) -> None:
     accumulator = EnergyAccumulator(state_path, max_gap_seconds=60)
 
     assert accumulator.energy_kwh == 0
+
+
+def test_energy_accumulator_preserves_unrelated_runtime_state(tmp_path: Path) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "energy_kwh": 1.5,
+                "last_location": {
+                    "latitude": 45.4642,
+                    "longitude": 9.19,
+                    "accuracy_m": 35.0,
+                    "timestamp": "2026-05-17T10:00:00+00:00",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    accumulator = EnergyAccumulator(state_path, max_gap_seconds=60)
+    accumulator.update(timestamp=datetime(2026, 5, 17, 10, 1, tzinfo=UTC), power_w=100)
+
+    data = json.loads(state_path.read_text(encoding="utf-8"))
+    assert data["last_location"] == {
+        "latitude": 45.4642,
+        "longitude": 9.19,
+        "accuracy_m": 35.0,
+        "timestamp": "2026-05-17T10:00:00+00:00",
+    }

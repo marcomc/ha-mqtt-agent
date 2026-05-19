@@ -6,7 +6,7 @@ mqtt_port = 1883
 # mqtt_username = "homeassistant"
 # mqtt_password = "change-me"
 
-mqtt_client_id = "ha-mqtt-agent"
+# mqtt_client_id = "ha-mqtt-agent-host"
 discovery_prefix = "homeassistant"
 topic_prefix = "ha_mqtt_agent"
 
@@ -20,6 +20,13 @@ max_energy_gap_seconds = 300
 network_interval_seconds = 60
 ping_timeout_seconds = 1
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
+home_ssids = []
+home_ipv4_cidrs = []
+home_gateways = []
+home_bssids = []
+home_gateway_macs = []
+publish_location = false
+location_timeout_seconds = 3
 ping_targets = [
   { id = "cloudflare_dns", host = "1.1.1.1", name = "Cloudflare DNS" },
   { id = "cloudflare_dns_secondary", host = "1.0.0.1", name = "Cloudflare DNS secondary" },

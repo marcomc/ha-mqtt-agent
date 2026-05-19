@@ -20,6 +20,7 @@ class EnergyAccumulator:
     def __init__(self, path: Path, *, max_gap_seconds: float) -> None:
         self.path = path
         self.max_gap_seconds = max_gap_seconds
+        self._extra_state: dict[str, Any] = {}
         self.state = self._load()
 
     def update(self, *, timestamp: datetime, power_w: float | None) -> float:
@@ -57,6 +58,11 @@ class EnergyAccumulator:
             data = json.loads(self.path.read_text(encoding="utf-8"))
             if not isinstance(data, dict):
                 return EnergyState()
+            self._extra_state = {
+                key: value
+                for key, value in data.items()
+                if key not in {"energy_kwh", "last_timestamp", "last_power_w"}
+            }
             return EnergyState(
                 energy_kwh=float(data.get("energy_kwh", 0.0)),
                 last_timestamp=_parse_timestamp(data.get("last_timestamp")),
@@ -68,6 +74,7 @@ class EnergyAccumulator:
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload: dict[str, Any] = {
+            **self._extra_state,
             "energy_kwh": self.state.energy_kwh,
             "last_timestamp": (
                 self.state.last_timestamp.isoformat() if self.state.last_timestamp else None

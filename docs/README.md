@@ -19,7 +19,7 @@ operational behavior is defined in one place.
 ## Included Defaults
 
 - `uv` for development environment and package management
-- local `python3` plus `pip` for the installed standalone runtime
+- auto-detected Python 3.11+ plus `pip` for the installed standalone runtime
 - `src/` package layout
 - `argparse` for a small CLI surface
 - TOML config loading via `tomllib`

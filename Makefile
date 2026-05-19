@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 UV ?= uv
-STANDALONE_PYTHON ?= python3
+STANDALONE_PYTHON ?= $(shell ./scripts/find-standalone-python.sh 2>/dev/null || printf 'python3')
 SWIFTC ?= swiftc
 PYTHON_VERSION ?= 3.11
 VENV ?= .venv
@@ -44,6 +44,7 @@ check-deps: ## Verify required local tools
 
 check-install-deps: ## Verify tools needed for the standalone install
 	@command -v "$(STANDALONE_PYTHON)" >/dev/null 2>&1 || { echo "$(STANDALONE_PYTHON) not found"; exit 1; }
+	@echo "Using standalone Python: $(STANDALONE_PYTHON)"
 	@command -v "$(SWIFTC)" >/dev/null 2>&1 || { echo "$(SWIFTC) not found. Install Xcode Command Line Tools."; exit 1; }
 	@command -v codesign >/dev/null 2>&1 || { echo "codesign not found. Install Xcode Command Line Tools."; exit 1; }
 	@$(STANDALONE_PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else "$(STANDALONE_PYTHON) must be Python 3.11 or newer")'
@@ -101,7 +102,7 @@ install-agent: install ## Install and start the macOS LaunchAgent
 uninstall-agent: ## Stop and remove the macOS LaunchAgent
 	@./scripts/uninstall-launch-agent.sh
 
-restart-agent: install-agent ## Restart the macOS LaunchAgent
+restart-agent: ## Restart the already installed macOS LaunchAgent
 	@launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
 agent-status: ## Show the macOS LaunchAgent status

@@ -21,13 +21,15 @@
   <string>0.1.1</string>
   <key>LSMinimumSystemVersion</key>
   <string>13.0</string>
+  <key>LSUIElement</key>
+  <true/>
   <key>NSLocationUsageDescription</key>
-  <string>Home Assistant MQTT Agent uses the current Wi-Fi network name to publish local Mac network telemetry to your Home Assistant MQTT device.</string>
+	<string>Home Assistant MQTT Agent uses Wi-Fi SSID/BSSID and optional coordinate or geocoded location telemetry for your Home Assistant MQTT device.</string>
   <key>NSLocationWhenInUseUsageDescription</key>
-  <string>Home Assistant MQTT Agent uses the current Wi-Fi network name to publish local Mac network telemetry to your Home Assistant MQTT device.</string>
+	<string>Home Assistant MQTT Agent uses Wi-Fi SSID/BSSID and optional coordinate or geocoded location telemetry for your Home Assistant MQTT device.</string>
   <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-  <string>Home Assistant MQTT Agent uses the current Wi-Fi network name to publish local Mac network telemetry to your Home Assistant MQTT device.</string>
+	<string>Home Assistant MQTT Agent uses Wi-Fi SSID/BSSID and optional coordinate or geocoded location telemetry for your Home Assistant MQTT device.</string>
   <key>NSLocationAlwaysUsageDescription</key>
-  <string>Home Assistant MQTT Agent uses the current Wi-Fi network name to publish local Mac network telemetry to your Home Assistant MQTT device.</string>
+	<string>Home Assistant MQTT Agent uses Wi-Fi SSID/BSSID and optional coordinate or geocoded location telemetry for your Home Assistant MQTT device.</string>
 </dict>
 </plist>

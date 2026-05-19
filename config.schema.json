@@ -22,7 +22,7 @@
     },
     "mqtt_client_id": {
       "type": "string",
-      "default": "ha-mqtt-agent"
+      "description": "Optional MQTT client ID. If omitted, the agent derives ha-mqtt-agent-{device_id}."
     },
     "discovery_prefix": {
       "type": "string",
@@ -122,6 +122,55 @@
     "wifi_helper_path": {
       "type": "string",
       "default": "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
+    },
+    "home_ssids": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "home_ipv4_cidrs": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "home_gateways": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "home_bssids": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"
+      }
+    },
+    "home_gateway_macs": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"
+      }
+    },
+    "publish_location": {
+      "type": "boolean",
+      "default": false
+    },
+    "location_timeout_seconds": {
+      "type": "number",
+      "minimum": 0.1,
+      "default": 3
     },
     "state_path": {
       "type": "string",

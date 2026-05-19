@@ -103,6 +103,13 @@ expire_after_seconds = 15
 network_interval_seconds = 60
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 publish_retain = true
+home_ssids = []
+home_ipv4_cidrs = []
+home_gateways = []
+home_bssids = []
+home_gateway_macs = []
+publish_location = false
+location_timeout_seconds = 3
 
 ping_targets = [
   { id = "cloudflare_dns", host = "1.1.1.1", name = "Cloudflare DNS" },
@@ -117,6 +124,35 @@ unavailable after about three missed publishes.
 checks are cached between these network samples. Each `ping_targets` entry gets
 its own Home Assistant latency sensor. `wifi_helper_path` points to the bundled
 helper app installed by `make install-agent`.
+
+The `home_*` lists drive the `Home network present` binary sensor. It turns on
+when any configured SSID, BSSID, IPv4 CIDR, gateway address, or gateway MAC
+matches the current network sample. `publish_location` is off by default; enable
+it only when you want latitude, longitude, and accuracy published to Home
+Assistant. The agent exposes those coordinates both as standalone sensors and as
+an MQTT `device_tracker` named `Location`, which is the entity type Home
+Assistant map cards can display. After the first valid coordinate, temporary
+CoreLocation failures do not erase the Home Assistant latitude and longitude
+sensors; the agent reuses the last known coordinate and exposes
+`Location cached`, `Location last seen`, `Location error`, and a
+`device_tracker` `last_seen` attribute so automations can distinguish live from
+cached location. The same setting publishes a `Geocoded location` sensor with
+macOS reverse-geocoded address attributes such as country, locality, postal
+code, street, areas of interest, and time zone. If the coordinate is cached, the
+agent reuses the matching cached geocoded address and marks
+`Geocoded location cached` as on.
+
+If `mqtt_client_id` is not set, the agent derives it from `device_id`. Manual
+one-shot publish commands add a process suffix, so they do not disconnect the
+background LaunchAgent while you are checking MQTT discovery.
+
+Example home-network match values:
+
+```toml
+home_ssids = ["Home WiFi", "Home WiFi 5G"]
+home_ipv4_cidrs = ["192.168.1.0/24"]
+home_gateways = ["192.168.1.1"]
+```
 
 If your broker requires credentials, add:
 
@@ -186,8 +222,17 @@ fresh state message.
    - `Battery status`
    - `Uptime`, in seconds
    - `Wi-Fi SSID`
+   - `Wi-Fi BSSID`
    - `Wi-Fi signal`, in `dBm`
    - `Wi-Fi signal percent`, in `%`
+   - `IPv4 addresses`
+   - `Default gateways`
+   - `Default gateway interfaces`
+   - `Gateway MACs`
+   - `Home network present`
+   - `Latitude`, `Longitude`, and `Location accuracy` when location publishing
+     is enabled
+   - `Geocoded location` when location publishing is enabled
    - `Ethernet active count`
    - `Ethernet active interfaces`
    - `Ping ...`, one latency sensor per configured ping target
@@ -223,7 +268,8 @@ Assistant dashboards. They are not Energy dashboard inputs.
 
 ## Step 6: Authorize Wi-Fi SSID Access
 
-macOS treats Wi-Fi SSID and BSSID as location-adjacent data. Run the
+macOS treats Wi-Fi SSID, BSSID, and geographic coordinates as location-adjacent
+data. Run the
 authorization helper once from the logged-in Mac session:
 
 ```bash
@@ -251,8 +297,8 @@ Helper**. If macOS does not show a prompt, open **System Settings > Privacy &
 Security > Location Services**, enable that helper there, and then restart the
 LaunchAgent.
 
-Without this permission, macOS may publish the SSID as `<redacted>`, while
-signal strength and ping sensors continue to work.
+Without this permission, macOS may publish the SSID as `<redacted>` and omit
+BSSID or location, while signal strength and ping sensors continue to work.
 
 ## Step 7: Run in the Background
 
@@ -331,7 +377,8 @@ Temporary broker or network failures are retried by the service loop.
   xcode-select --install
   ```
 
-- Install Python 3.11 or newer if `python3` is missing or too old.
+- Install Python 3.11 or newer if no compatible `python3.14`, `python3.13`,
+  `python3.12`, `python3.11`, `uv`-managed Python, or `python3` is available.
 
 ### CPU, GPU, fan, or SSD temperatures are missing
 
