@@ -17,6 +17,15 @@ sample_interval_seconds = 5
 # Minimum supported publish interval is 1 second.
 expire_after_seconds = 15
 max_energy_gap_seconds = 300
+network_interval_seconds = 60
+ping_timeout_seconds = 1
+wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
+ping_targets = [
+  { id = "cloudflare_dns", host = "1.1.1.1", name = "Cloudflare DNS" },
+  { id = "cloudflare_dns_secondary", host = "1.0.0.1", name = "Cloudflare DNS secondary" },
+  { id = "google_dns", host = "8.8.8.8", name = "Google DNS" },
+  { id = "google_dns_secondary", host = "8.8.4.4", name = "Google DNS secondary" }
+]
 state_path = "~/.local/state/ha-mqtt-agent/state.json"
 publish_retain = true
 verbose = false

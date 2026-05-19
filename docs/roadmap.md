@@ -91,3 +91,19 @@ binaries.
 - Avoid hosted release workflows until distribution requirements are clear.
 
 Backlog: [HMA-008](../TODO.md#hma-008-release-automation)
+
+## HMA-009 Prebuilt Notarized macOS Installer
+
+Add a non-developer install path for public releases.
+
+- Build the Wi-Fi SSID helper before release instead of on the user's machine.
+- Sign the helper with the maintainer's Developer ID Application certificate.
+- Notarize and staple the helper or installer before publishing.
+- Package the Python runtime, LaunchAgent plist, config template, and helper in
+  a release artifact.
+- Keep `./scripts/install.sh` and `make install-agent` as the source install
+  path for users with local build tools.
+- Document how to verify the release signature, notarization status, and
+  installed LaunchAgent.
+
+Backlog: [HMA-009](../TODO.md#hma-009-prebuilt-notarized-macos-installer)

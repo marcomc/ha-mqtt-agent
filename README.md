@@ -7,8 +7,10 @@
 - [Features](#features)
 - [Requirements](#requirements)
 - [Quick Install](#quick-install)
+- [Install Modes](#install-modes)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Authorizing Wi-Fi SSID Access](#authorizing-wi-fi-ssid-access)
 - [Usage](#usage)
 - [Home Assistant Entities](#home-assistant-entities)
 - [Running as a macOS Service](#running-as-a-macos-service)
@@ -22,10 +24,10 @@
 `Home Assistant MQTT Agent` publishes local Mac telemetry to an MQTT broker
 using Home Assistant MQTT discovery.
 
-The current provider reads macOS AppleSmartBattery telemetry, publishes current
-power in watts, keeps a persistent total energy counter in kWh, and exposes
-battery charge, battery maximum capacity, battery temperature, uptime, cycle
-count, and charge status as Home Assistant entities.
+The current provider reads macOS AppleSmartBattery and user-space network
+telemetry. It publishes current power in watts, keeps a persistent total energy
+counter in kWh, and exposes battery, uptime, Wi-Fi, Ethernet, and external ping
+checks as Home Assistant entities.
 
 The default broker host is `mqtt.example.local:1883`, but every MQTT setting is
 configurable so the tool can be reused with any Home Assistant setup that has
@@ -44,9 +46,15 @@ flowchart LR
   accDescr: Shows how the LaunchAgent publishes Mac telemetry to Home Assistant through MQTT.
   install["make install-agent"] --> plist["Write LaunchAgent plist"]
   plist --> launchd["macOS launchd starts ha-mqtt-agent run"]
-  launchd --> reader["Read AppleSmartBattery telemetry"]
-  reader --> energy["Update local kWh state"]
-  energy --> payload["Build MQTT state payload"]
+  launchd --> battery["Read AppleSmartBattery telemetry"]
+  launchd --> network["Read network telemetry"]
+  network --> helper{"Wi-Fi helper authorized?"}
+  helper -->|Yes| ssid["Read SSID through CoreWLAN"]
+  helper -->|No| fallback["Use user-space fallback values"]
+  battery --> energy["Update local kWh state"]
+  ssid --> payload["Build MQTT state payload"]
+  fallback --> payload
+  energy --> payload
   payload --> mqtt["Publish discovery and state to MQTT broker"]
   mqtt --> ha["Home Assistant updates MQTT entities"]
 ```
@@ -61,6 +69,10 @@ flowchart LR
 - Battery charge, maximum capacity, raw maximum capacity, cycle count, and
   status sensors.
 - Battery temperature, battery virtual temperature, and system uptime sensors.
+- Wi-Fi SSID, Wi-Fi signal in `dBm`, and Wi-Fi signal as a percentage.
+- Active wired Ethernet interface count and active interface list.
+- Configurable external ping latency sensors, with Google and Cloudflare DNS
+  targets enabled by default.
 - Persistent local energy accumulator that survives restarts.
 - Packaged command-line app exposed as `ha-mqtt-agent`.
 
@@ -73,6 +85,8 @@ For users:
 
 - Python `3.11` or newer
 - `make`
+- Xcode Command Line Tools with `swiftc` and `codesign` for the Wi-Fi SSID
+  helper
 - macOS with `ioreg` for the current telemetry provider
 - an MQTT broker reachable from the Mac
 - Home Assistant MQTT integration with discovery enabled
@@ -81,6 +95,7 @@ For maintainers:
 
 - `markdownlint`
 - `shellcheck`
+- Xcode Command Line Tools with `swiftc`
 
 ## Quick Install
 
@@ -116,6 +131,49 @@ Then restart the service:
 make restart-agent
 ```
 
+## Install Modes
+
+The current supported install mode is a source install for users who can build
+and locally sign the Wi-Fi helper on their Mac. There is not yet a prebuilt,
+Developer ID signed, notarized installer for non-developer users.
+
+### Current Source Install
+
+`./scripts/install.sh` and `make install-agent` expect local build tools:
+
+- Python `3.11` or newer for the packaged CLI runtime.
+- `make` to run the project install targets.
+- `swiftc` to compile the Wi-Fi SSID helper app.
+- `codesign` to apply the helper's local ad-hoc signature.
+
+The source install builds the helper during installation, then signs it with an
+ad-hoc local signature. This is enough for the local Mac to run the helper and
+request the macOS Location permission needed to read the current Wi-Fi SSID. It
+is not a public distribution signature and does not require an Apple Developer
+account.
+
+The installer checks for these tools before installing. On macOS, `make`,
+`swiftc`, and `codesign` are normally provided by Xcode Command Line Tools:
+
+```bash
+xcode-select --install
+```
+
+After installing the command line tools, rerun:
+
+```bash
+./scripts/install.sh
+```
+
+### Future Prebuilt Install
+
+A non-developer install path is planned but not shipped yet. That path should
+provide a prebuilt helper app signed with the maintainer's Developer ID
+Application certificate and notarized before release. In that future mode,
+users should not need `swiftc`, local helper compilation, or local signing.
+
+The backlog item is tracked as [HMA-009](TODO.md#hma-009-prebuilt-notarized-macos-installer).
+
 ## Installation
 
 For scripted installs, use the Make target directly:
@@ -126,6 +184,8 @@ make install-agent
 
 `make install-agent`:
 
+- builds the Wi-Fi SSID helper app from `macos/WifiHelper/`
+- signs the helper locally with an ad-hoc signature and the Location entitlement
 - creates a standalone virtual environment in
   `~/.local/share/ha-mqtt-agent/venv`
 - installs the packaged CLI into that standalone runtime
@@ -171,13 +231,65 @@ device_id = "workstation"
 device_name = "Workstation"
 sample_interval_seconds = 5
 expire_after_seconds = 15
+network_interval_seconds = 60
+ping_timeout_seconds = 1
+wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 state_path = "~/.local/state/ha-mqtt-agent/state.json"
 verbose = false
+
+ping_targets = [
+  { id = "cloudflare_dns", host = "1.1.1.1", name = "Cloudflare DNS" },
+  { id = "cloudflare_dns_secondary", host = "1.0.0.1", name = "Cloudflare DNS secondary" },
+  { id = "google_dns", host = "8.8.8.8", name = "Google DNS" },
+  { id = "google_dns_secondary", host = "8.8.4.4", name = "Google DNS secondary" }
+]
 ```
 
 `sample_interval_seconds` defaults to `5` and may be set as low as `1`.
 `expire_after_seconds` defaults to `15`, so Home Assistant marks sensors
 unavailable after about three missed publishes.
+`network_interval_seconds` defaults to `60`; Wi-Fi, Ethernet, and ping probes
+are cached between those slower network samples while the normal telemetry loop
+keeps publishing. `ping_timeout_seconds` defaults to `1`.
+
+Each `ping_targets` entry creates a separate Home Assistant latency sensor named
+from its `id`. To configure a longer list quickly, `ping_targets` can also be a
+plain host list, for example:
+
+```toml
+ping_targets = ["192.168.1.1", "1.1.1.1", "8.8.8.8", "9.9.9.9"]
+```
+
+On newer macOS versions, SSID access requires the macOS Location permission for
+the bundled Wi-Fi helper app. Signal strength is still published from the
+fallback user-space probes even before the SSID helper is authorized.
+
+## Authorizing Wi-Fi SSID Access
+
+macOS treats Wi-Fi SSID and BSSID as location-adjacent data. `make install`
+installs a small signed helper app at:
+
+```text
+~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app
+```
+
+Run this once from the logged-in Mac session:
+
+```bash
+ha-mqtt-agent authorize-wifi
+```
+
+Approve the Location Services prompt for **Home Assistant MQTT Agent Wi-Fi
+Helper**. If the prompt does not appear, open **System Settings > Privacy &
+Security > Location Services** and enable that helper there, then restart the
+LaunchAgent:
+
+```bash
+make restart-agent
+```
+
+Without that permission, macOS may return `<redacted>` for the SSID while still
+allowing the app to publish Wi-Fi signal strength.
 
 For brokers with authentication, set:
 
@@ -239,6 +351,12 @@ with these entities:
 - Battery cycle count.
 - Battery status: `charging`, `charged`, `plugged_in`, or `discharging`.
 - Uptime: system uptime in seconds.
+- Wi-Fi SSID.
+- Wi-Fi signal in `dBm`.
+- Wi-Fi signal percent in `%`.
+- Ethernet active count.
+- Ethernet active interfaces.
+- One ping latency sensor in `ms` for each configured `ping_targets` entry.
 
 The energy entity is the one to add under Home Assistant's Energy dashboard.
 Home Assistant long-term statistics are fed by the `total_increasing` kWh
@@ -247,7 +365,7 @@ sensor.
 Sensors use `expire_after_seconds` in MQTT discovery. The default is `15`, so
 Home Assistant marks them unavailable after about three missed publishes.
 
-CPU, GPU, memory, SSD, palm-rest, Wi-Fi, and fan sensors are not exposed by the
+CPU, GPU, memory, SSD, palm-rest, and fan sensors are not exposed by the
 default LaunchAgent because macOS does not provide those detailed thermal
 channels to this app without a privileged sensor source. The default publisher
 stays user-scoped and does not require root.

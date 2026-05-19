@@ -23,6 +23,18 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v swiftc >/dev/null 2>&1; then
+  echo "swiftc not found. Install Xcode Command Line Tools, then rerun this script." >&2
+  echo "Try: xcode-select --install" >&2
+  exit 1
+fi
+
+if ! command -v codesign >/dev/null 2>&1; then
+  echo "codesign not found. Install Xcode Command Line Tools, then rerun this script." >&2
+  echo "Try: xcode-select --install" >&2
+  exit 1
+fi
+
 python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' || {
   echo "python3 must be version 3.11 or newer." >&2
   exit 1

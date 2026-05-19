@@ -41,3 +41,12 @@
 
 - Roadmap: [HMA-008](docs/roadmap.md#hma-008-release-automation)
 - Add release automation when publishing packages or binaries.
+
+### HMA-009 Prebuilt Notarized macOS Installer
+
+- Roadmap: [HMA-009](docs/roadmap.md#hma-009-prebuilt-notarized-macos-installer)
+- Add a non-developer install path with a prebuilt Developer ID signed and
+  notarized Wi-Fi helper app.
+- Package the Python runtime, LaunchAgent, config template, and helper into a
+  release artifact that does not require local `swiftc` or local signing.
+- Keep the current source install path for development and advanced users.

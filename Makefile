@@ -2,6 +2,7 @@ SHELL := /bin/bash
 
 UV ?= uv
 STANDALONE_PYTHON ?= python3
+SWIFTC ?= swiftc
 PYTHON_VERSION ?= 3.11
 VENV ?= .venv
 PROJECT_NAME ?= Home Assistant MQTT Agent
@@ -14,13 +15,14 @@ INSTALL_PATH ?= $(BINDIR)/$(CLI_NAME)
 APP_HOME ?= $(HOME)/.local/share/$(CLI_NAME)
 APP_VENV ?= $(APP_HOME)/venv
 APP_PYTHON ?= $(APP_VENV)/bin/python
+WIFI_HELPER_APP ?= $(APP_HOME)/HaMqttAgentWifiHelper.app
 CONFIG_DIR ?= $(HOME)/.config/$(CONFIG_NAME)
 CONFIG_PATH ?= $(CONFIG_DIR)/config.toml
 MARKDOWN_FILES := README.md CHANGELOG.md TODO.md AGENTS.md docs/*.md
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check-deps check-install-deps sync install install-dev install-link install-config install-agent uninstall-agent restart-agent agent-status uninstall lint test check run clean
+.PHONY: help check-deps check-install-deps sync install install-dev install-link install-config install-wifi-helper check-wifi-helper install-agent uninstall-agent restart-agent agent-status uninstall lint test check run clean
 
 help: ## Show available targets
 	@awk 'BEGIN { FS = ":.*##" } /^[a-zA-Z_-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -42,6 +44,8 @@ check-deps: ## Verify required local tools
 
 check-install-deps: ## Verify tools needed for the standalone install
 	@command -v "$(STANDALONE_PYTHON)" >/dev/null 2>&1 || { echo "$(STANDALONE_PYTHON) not found"; exit 1; }
+	@command -v "$(SWIFTC)" >/dev/null 2>&1 || { echo "$(SWIFTC) not found. Install Xcode Command Line Tools."; exit 1; }
+	@command -v codesign >/dev/null 2>&1 || { echo "codesign not found. Install Xcode Command Line Tools."; exit 1; }
 	@$(STANDALONE_PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else "$(STANDALONE_PYTHON) must be Python 3.11 or newer")'
 	@mkdir -p "$(BINDIR)" "$(CONFIG_DIR)"
 	@if echo "$$PATH" | tr ':' '\n' | grep -Fxq "$(BINDIR)"; then \
@@ -57,7 +61,7 @@ $(VENV)/bin/python: pyproject.toml
 
 sync: $(VENV)/bin/python ## Sync the project environment
 
-install: check-install-deps ## Install a standalone user-facing runtime
+install: check-install-deps install-wifi-helper ## Install a standalone user-facing runtime
 	@mkdir -p "$(APP_HOME)"
 	@rm -rf "$(APP_VENV)"
 	@"$(STANDALONE_PYTHON)" -m venv "$(APP_VENV)"
@@ -84,6 +88,12 @@ install-config: ## Install the example config file if missing
 	else \
 		echo "Config already exists at $(CONFIG_PATH)"; \
 	fi
+
+install-wifi-helper: ## Install the macOS Wi-Fi SSID helper app
+	@SWIFTC="$(SWIFTC)" ./scripts/build-wifi-helper.sh "$(WIFI_HELPER_APP)"
+
+check-wifi-helper: ## Build the macOS Wi-Fi SSID helper app for validation
+	@SWIFTC="$(SWIFTC)" ./scripts/build-wifi-helper.sh "$(abspath .build/check/HaMqttAgentWifiHelper.app)"
 
 install-agent: install ## Install and start the macOS LaunchAgent
 	@./scripts/install-launch-agent.sh
@@ -113,10 +123,10 @@ lint: sync ## Run Python, Markdown, and shell quality checks
 test: sync ## Run the test suite
 	@"$(UV)" run pytest -q
 
-check: lint test ## Run the full maintainer quality gate
+check: lint test check-wifi-helper ## Run the full maintainer quality gate
 
 run: sync ## Show the CLI help from the dev environment
 	@"$(UV)" run "$(CLI_NAME)" --help
 
 clean: ## Remove local development artifacts
-	rm -rf "$(VENV)" .pytest_cache .mypy_cache .ruff_cache build dist src/*.egg-info *.egg-info
+	rm -rf "$(VENV)" .build .pytest_cache .mypy_cache .ruff_cache build dist src/*.egg-info *.egg-info

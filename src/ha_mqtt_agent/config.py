@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -9,7 +10,34 @@ from typing import Any, SupportsFloat, SupportsIndex
 
 DEFAULT_CONFIG_PATH = Path.home() / ".config" / "ha-mqtt-agent" / "config.toml"
 DEFAULT_STATE_PATH = Path.home() / ".local" / "state" / "ha-mqtt-agent" / "state.json"
+DEFAULT_WIFI_HELPER_PATH = (
+    Path.home()
+    / ".local"
+    / "share"
+    / "ha-mqtt-agent"
+    / "HaMqttAgentWifiHelper.app"
+    / "Contents"
+    / "MacOS"
+    / "HaMqttAgentWifiHelper"
+)
 MIN_SAMPLE_INTERVAL_SECONDS = 1.0
+MIN_NETWORK_INTERVAL_SECONDS = 1.0
+MIN_PING_TIMEOUT_SECONDS = 0.1
+
+
+@dataclass(frozen=True)
+class PingTarget:
+    id: str
+    host: str
+    name: str
+
+
+DEFAULT_PING_TARGETS = (
+    PingTarget(id="cloudflare_dns", host="1.1.1.1", name="Cloudflare DNS"),
+    PingTarget(id="cloudflare_dns_secondary", host="1.0.0.1", name="Cloudflare DNS secondary"),
+    PingTarget(id="google_dns", host="8.8.8.8", name="Google DNS"),
+    PingTarget(id="google_dns_secondary", host="8.8.4.4", name="Google DNS secondary"),
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +54,10 @@ class AppConfig:
     sample_interval_seconds: float = 5.0
     expire_after_seconds: float = 15.0
     max_energy_gap_seconds: float = 300.0
+    network_interval_seconds: float = 60.0
+    ping_timeout_seconds: float = 1.0
+    ping_targets: tuple[PingTarget, ...] = DEFAULT_PING_TARGETS
+    wifi_helper_path: Path = DEFAULT_WIFI_HELPER_PATH
     state_path: Path = DEFAULT_STATE_PATH
     publish_retain: bool = True
     verbose: bool = False
@@ -81,6 +113,20 @@ def load_config(path: Path) -> AppConfig:
             minimum=1.0,
             key="max_energy_gap_seconds",
         ),
+        network_interval_seconds=_float_at_least(
+            data.get("network_interval_seconds", 60.0),
+            minimum=MIN_NETWORK_INTERVAL_SECONDS,
+            key="network_interval_seconds",
+        ),
+        ping_timeout_seconds=_float_at_least(
+            data.get("ping_timeout_seconds", 1.0),
+            minimum=MIN_PING_TIMEOUT_SECONDS,
+            key="ping_timeout_seconds",
+        ),
+        ping_targets=_parse_ping_targets(data.get("ping_targets", DEFAULT_PING_TARGETS)),
+        wifi_helper_path=Path(
+            str(data.get("wifi_helper_path", DEFAULT_WIFI_HELPER_PATH))
+        ).expanduser(),
         state_path=Path(str(data.get("state_path", DEFAULT_STATE_PATH))).expanduser(),
         publish_retain=bool(data.get("publish_retain", True)),
         verbose=bool(data.get("verbose", False)),
@@ -104,3 +150,49 @@ def _float_at_least(value: object, *, minimum: float, key: str) -> float:
     if parsed < minimum:
         raise ValueError(f"{key} must be at least {minimum:g} seconds.")
     return parsed
+
+
+def _parse_ping_targets(value: object) -> tuple[PingTarget, ...]:
+    if value == DEFAULT_PING_TARGETS:
+        return DEFAULT_PING_TARGETS
+    if not isinstance(value, list):
+        raise TypeError("ping_targets must be a list of hosts or tables.")
+
+    targets = tuple(_parse_ping_target(item) for item in value)
+    ids = [target.id for target in targets]
+    if len(ids) != len(set(ids)):
+        raise ValueError("ping_targets ids must be unique.")
+    return targets
+
+
+def _parse_ping_target(value: object) -> PingTarget:
+    if isinstance(value, str):
+        host = value.strip()
+        if not host:
+            raise ValueError("ping_targets host entries must not be empty.")
+        return PingTarget(id=_ping_target_id_from_host(host), host=host, name=host)
+
+    if isinstance(value, dict):
+        host = str(value.get("host", "")).strip()
+        if not host:
+            raise ValueError("ping_targets entries must include a non-empty host.")
+        target_id = str(value.get("id") or _ping_target_id_from_host(host)).strip()
+        name = str(value.get("name") or host).strip()
+        if not re.fullmatch(r"[a-z0-9_]+", target_id):
+            raise ValueError(
+                "ping_targets ids must contain only lowercase letters, numbers, and underscores."
+            )
+        if not name:
+            raise ValueError("ping_targets names must not be empty.")
+        return PingTarget(id=target_id, host=host, name=name)
+
+    raise TypeError("ping_targets entries must be hosts or tables.")
+
+
+def _ping_target_id_from_host(host: str) -> str:
+    target_id = re.sub(r"[^a-z0-9]+", "_", host.lower()).strip("_")
+    if not target_id:
+        raise ValueError("ping_targets host entries must produce a non-empty id.")
+    if target_id[0].isdigit():
+        target_id = f"ip_{target_id}"
+    return target_id

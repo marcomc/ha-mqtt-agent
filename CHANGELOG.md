@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Home Assistant MQTT discovery publisher for macOS telemetry.
 - Power, energy, battery charge, battery health, battery capacity, battery
   temperature, cycle count, charge status, and uptime sensors.
+- Wi-Fi SSID, Wi-Fi signal, wired Ethernet status, and configurable external
+  ping latency sensors.
+- Bundled macOS Wi-Fi helper app and `authorize-wifi` command for granting
+  Location Services access to the current SSID.
 - Persistent kWh energy accumulator for Home Assistant Energy dashboard use.
 - macOS-only telemetry provider based on AppleSmartBattery data. Linux and
   Raspberry Pi hosts are not supported yet.

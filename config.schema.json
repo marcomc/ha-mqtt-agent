@@ -55,6 +55,74 @@
       "minimum": 1,
       "default": 300
     },
+    "network_interval_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "default": 60
+    },
+    "ping_timeout_seconds": {
+      "type": "number",
+      "minimum": 0.1,
+      "default": 1
+    },
+    "ping_targets": {
+      "type": "array",
+      "default": [
+        {
+          "id": "cloudflare_dns",
+          "host": "1.1.1.1",
+          "name": "Cloudflare DNS"
+        },
+        {
+          "id": "cloudflare_dns_secondary",
+          "host": "1.0.0.1",
+          "name": "Cloudflare DNS secondary"
+        },
+        {
+          "id": "google_dns",
+          "host": "8.8.8.8",
+          "name": "Google DNS"
+        },
+        {
+          "id": "google_dns_secondary",
+          "host": "8.8.4.4",
+          "name": "Google DNS secondary"
+        }
+      ],
+      "items": {
+        "oneOf": [
+          {
+            "type": "string",
+            "minLength": 1
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "host"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$"
+              },
+              "host": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "wifi_helper_path": {
+      "type": "string",
+      "default": "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
+    },
     "state_path": {
       "type": "string",
       "default": "~/.local/state/ha-mqtt-agent/state.json"

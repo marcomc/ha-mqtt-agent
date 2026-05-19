@@ -55,6 +55,9 @@ Expected checks:
   writes, network publishes, and service changes.
 - When adding or changing config keys, keep loader validation, schema bounds,
   examples, docs, and tests synchronized.
+- When adding helper app modes, keep normal telemetry sampling on non-interactive
+  read paths. Reserve prompts, permission requests, and app activation for
+  explicit CLI commands, and test the helper argv for both paths.
 
 ## Release Hygiene
 

@@ -9,6 +9,7 @@ import pytest
 
 from ha_mqtt_agent import __version__, cli
 from ha_mqtt_agent.config import AppConfig, load_config
+from ha_mqtt_agent.network import NetworkSample, WifiStatus
 from ha_mqtt_agent.sensors import SensorSample
 
 
@@ -89,6 +90,56 @@ def test_config_reads_expire_after_seconds(tmp_path: Path) -> None:
     assert config.expire_after_seconds == 5
 
 
+def test_config_reads_custom_ping_targets(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    helper_path = tmp_path / "WifiHelper"
+    config_path.write_text(
+        f"""
+        ping_targets = [
+          {{ id = "router", host = "192.168.1.1", name = "Router" }},
+          {{ id = "quad9_dns", host = "9.9.9.9", name = "Quad9 DNS" }}
+        ]
+        network_interval_seconds = 30
+        ping_timeout_seconds = 0.5
+        wifi_helper_path = "{helper_path}"
+        """,
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+
+    assert [target.id for target in config.ping_targets] == ["router", "quad9_dns"]
+    assert [target.host for target in config.ping_targets] == ["192.168.1.1", "9.9.9.9"]
+    assert config.network_interval_seconds == 30
+    assert config.ping_timeout_seconds == 0.5
+    assert config.wifi_helper_path == helper_path
+
+
+def test_config_accepts_ping_targets_as_host_list(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('ping_targets = ["1.1.1.1", "8.8.8.8"]\n', encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert [target.id for target in config.ping_targets] == ["ip_1_1_1_1", "ip_8_8_8_8"]
+
+
+def test_config_rejects_duplicate_ping_target_ids(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+        ping_targets = [
+          { id = "router", host = "192.168.1.1", name = "Router" },
+          { id = "router", host = "192.168.1.2", name = "Backup router" }
+        ]
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="ping_targets ids must be unique"):
+        load_config(config_path)
+
+
 def test_config_rejects_max_energy_gap_below_supported_minimum(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("max_energy_gap_seconds = 0\n", encoding="utf-8")
@@ -133,7 +184,19 @@ def test_sample_command_does_not_write_energy_state(
     )
     reader = Mock()
     reader.read.return_value = sample
+    network_reader = Mock()
+    network_reader.read.return_value = NetworkSample(
+        wifi=WifiStatus(
+            interface="en0",
+            ssid="Office",
+            signal_dbm=-55,
+            signal_percent=90,
+        ),
+        ethernet=(),
+        pings=(),
+    )
     monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
+    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
 
     result = cli._handle_sample(config, as_json=True)
 
@@ -141,6 +204,7 @@ def test_sample_command_does_not_write_energy_state(
     payload = json.loads(captured.out)
     assert result == 0
     assert payload["energy_kwh"] == 0
+    assert payload["wifi_ssid"] == "Office"
     assert not config.state_path.exists()
 
 
@@ -154,7 +218,7 @@ def test_publish_once_sends_discovery_availability_and_state(
     monkeypatch.setattr(
         cli,
         "_sample_payload",
-        lambda _config: {
+        lambda _config, **_kwargs: {
             "timestamp": "2026-05-17T10:00:00+00:00",
             "power_w": 12.3,
             "energy_kwh": 0.001,
@@ -171,6 +235,32 @@ def test_publish_once_sends_discovery_availability_and_state(
     assert "ha_mqtt_agent/host/state" in topics
 
 
+def test_authorize_wifi_runs_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    helper_path = tmp_path / "HaMqttAgentWifiHelper"
+    helper_path.write_text("", encoding="utf-8")
+    config = AppConfig(wifi_helper_path=helper_path)
+    result_mock = Mock()
+    result_mock.returncode = 0
+    result_mock.stdout = (
+        '{"authorization_status":"authorized_when_in_use","ssid":"Office WiFi","signal_dbm":-53}'
+    )
+    result_mock.stderr = ""
+    run_mock = Mock(return_value=result_mock)
+    monkeypatch.setattr("ha_mqtt_agent.cli.subprocess.run", run_mock)
+
+    result = cli._handle_authorize_wifi(config, as_json=False)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "authorization_status: authorized_when_in_use" in captured.out
+    assert "wifi_ssid: Office WiFi" in captured.out
+    assert run_mock.call_args.args[0] == [str(helper_path), "--authorize"]
+
+
 def test_run_keeps_running_after_publish_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -179,7 +269,13 @@ def test_run_keeps_running_after_publish_failure(
     config = AppConfig(state_path=tmp_path / "state.json", sample_interval_seconds=0)
     attempts = {"count": 0}
 
-    def publish_once(_config: AppConfig, *, skip_discovery: bool) -> None:
+    def publish_once(
+        _config: AppConfig,
+        *,
+        skip_discovery: bool,
+        network_cache: object | None = None,
+    ) -> None:
+        _ = (skip_discovery, network_cache)
         attempts["count"] += 1
         if attempts["count"] == 1:
             raise OSError("temporary network failure")
