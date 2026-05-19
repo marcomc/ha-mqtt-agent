@@ -116,7 +116,44 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "unit": "s",
             "template": "{{ value_json.uptime_seconds }}",
         },
+        {
+            "object": "wifi_ssid",
+            "name": "Wi-Fi SSID",
+            "unique": "wifi_ssid",
+            "template": "{{ value_json.wifi_ssid }}",
+        },
+        {
+            "object": "wifi_signal_dbm",
+            "name": "Wi-Fi signal",
+            "unique": "wifi_signal_dbm",
+            "device_class": "signal_strength",
+            "state_class": "measurement",
+            "unit": "dBm",
+            "template": "{{ value_json.wifi_signal_dbm }}",
+        },
+        {
+            "object": "wifi_signal_percent",
+            "name": "Wi-Fi signal percent",
+            "unique": "wifi_signal_percent",
+            "state_class": "measurement",
+            "unit": "%",
+            "template": "{{ value_json.wifi_signal_percent }}",
+        },
+        {
+            "object": "ethernet_active_count",
+            "name": "Ethernet active count",
+            "unique": "ethernet_active_count",
+            "state_class": "measurement",
+            "template": "{{ value_json.ethernet_active_count }}",
+        },
+        {
+            "object": "ethernet_active_interfaces",
+            "name": "Ethernet active interfaces",
+            "unique": "ethernet_active_interfaces",
+            "template": "{{ value_json.ethernet_active_interfaces }}",
+        },
     ]
+    sensors.extend(_ping_sensor_specs(config))
     return [_sensor_discovery_message(config, sensor) for sensor in sensors]
 
 
@@ -196,6 +233,21 @@ def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMe
 
     topic = f"{config.discovery_prefix}/sensor/{unique_id}/config"
     return MqttMessage(topic=topic, payload=json.dumps(payload, sort_keys=True), retain=True)
+
+
+def _ping_sensor_specs(config: AppConfig) -> list[dict[str, str]]:
+    return [
+        {
+            "object": f"ping_{target.id}",
+            "name": f"Ping {target.name}",
+            "unique": f"ping_{target.id}",
+            "device_class": "duration",
+            "state_class": "measurement",
+            "unit": "ms",
+            "template": f"{{{{ value_json.ping_{target.id}_ms }}}}",
+        }
+        for target in config.ping_targets
+    ]
 
 
 def _device_payload(config: AppConfig) -> dict[str, object]:

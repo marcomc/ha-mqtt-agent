@@ -4,9 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.0] - Unreleased
+## [0.1.1] - 2026-05-19
 
-### Added
+### Added in 0.1.1
+
+- Wi-Fi SSID, Wi-Fi signal, wired Ethernet status, and configurable external
+  ping latency sensors.
+- Bundled macOS Wi-Fi helper app and `authorize-wifi` command for granting
+  Location Services access to the current SSID.
+
+## [0.1.0] - 2026-05-19
+
+### Added in 0.1.0
 
 - Home Assistant MQTT discovery publisher for macOS telemetry.
 - Power, energy, battery charge, battery health, battery capacity, battery

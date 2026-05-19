@@ -44,6 +44,30 @@ def test_discovery_messages_define_temperature_and_uptime_sensors() -> None:
     assert uptime["value_template"] == "{{ value_json.uptime_seconds }}"
 
 
+def test_discovery_messages_define_network_and_ping_sensors() -> None:
+    config = AppConfig(device_id="workstation", device_name="Workstation")
+    messages = {
+        message.topic: json.loads(message.payload) for message in discovery_messages(config)
+    }
+
+    wifi_signal = messages["homeassistant/sensor/workstation_wifi_signal_dbm/config"]
+    assert wifi_signal["device_class"] == "signal_strength"
+    assert wifi_signal["unit_of_measurement"] == "dBm"
+    assert wifi_signal["value_template"] == "{{ value_json.wifi_signal_dbm }}"
+
+    wifi_percent = messages["homeassistant/sensor/workstation_wifi_signal_percent/config"]
+    assert wifi_percent["unit_of_measurement"] == "%"
+    assert wifi_percent["value_template"] == "{{ value_json.wifi_signal_percent }}"
+
+    ethernet = messages["homeassistant/sensor/workstation_ethernet_active_interfaces/config"]
+    assert ethernet["value_template"] == "{{ value_json.ethernet_active_interfaces }}"
+
+    ping = messages["homeassistant/sensor/workstation_ping_cloudflare_dns/config"]
+    assert ping["device_class"] == "duration"
+    assert ping["unit_of_measurement"] == "ms"
+    assert ping["value_template"] == "{{ value_json.ping_cloudflare_dns_ms }}"
+
+
 def test_discovery_messages_expire_entities_after_configured_window() -> None:
     config = AppConfig(device_id="workstation", expire_after_seconds=15)
 
