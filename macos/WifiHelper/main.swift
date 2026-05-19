@@ -242,10 +242,7 @@ func currentWifiSnapshot(
     locationTimeoutSeconds: TimeInterval?,
     geocodeTimeoutSeconds: TimeInterval?
 ) -> WifiSnapshot {
-    var status = authorizer.authorizationStatus()
-    if status == .notDetermined {
-        status = authorizer.requestAuthorization(timeoutSeconds: 3)
-    }
+    let status = authorizer.authorizationStatus()
     let authorized = isAuthorized(status)
     let location = locationTimeoutSeconds.flatMap { authorizer.currentLocation(timeoutSeconds: $0) }
     let geocodedLocation = location.flatMap { currentLocation in
@@ -478,9 +475,11 @@ func printUsage() {
 let rawArguments = Array(CommandLine.arguments.dropFirst())
 let arguments = Set(rawArguments)
 let application = NSApplication.shared
-application.setActivationPolicy(.regular)
 if arguments.contains("--authorize") {
+    application.setActivationPolicy(.regular)
     application.activate(ignoringOtherApps: true)
+} else {
+    application.setActivationPolicy(.accessory)
 }
 application.finishLaunching()
 let authorizer = LocationAuthorizer()

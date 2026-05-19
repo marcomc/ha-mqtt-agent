@@ -57,9 +57,14 @@ Expected checks:
   writes, network publishes, and service changes.
 - When adding or changing config keys, keep loader validation, schema bounds,
   examples, docs, and tests synchronized.
+- Keep install-created config templates inert for opt-in telemetry: placeholder
+  SSIDs, CIDRs, gateways, client IDs, and location settings must not enable
+  user-specific behavior until the user edits them.
 - When adding helper app modes, keep normal telemetry sampling on non-interactive
   read paths. Reserve prompts, permission requests, and app activation for
   explicit CLI commands, and test the helper argv for both paths.
+- When adding optional Home Assistant entities, gate discovery and auxiliary
+  publish topics on the same config flag that gates the runtime telemetry.
 
 ## Release Hygiene
 

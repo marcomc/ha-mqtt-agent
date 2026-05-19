@@ -96,6 +96,17 @@ def test_config_keeps_explicit_mqtt_client_id(tmp_path: Path) -> None:
     assert config.resolved_mqtt_client_id == "custom-agent"
 
 
+def test_example_config_uses_inert_home_network_defaults() -> None:
+    config = load_config(Path("config.toml.example"))
+
+    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-host"
+    assert config.home_ssids == ()
+    assert config.home_ipv4_cidrs == ()
+    assert config.home_gateways == ()
+    assert config.home_bssids == ()
+    assert config.home_gateway_macs == ()
+
+
 def test_config_rejects_sample_interval_below_supported_minimum(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text("sample_interval_seconds = 0.5\n", encoding="utf-8")
@@ -512,7 +523,7 @@ def test_publish_once_sends_discovery_availability_and_state(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    config = AppConfig(state_path=tmp_path / "state.json")
+    config = AppConfig(state_path=tmp_path / "state.json", publish_location=True)
     publish_mock = Mock()
     monkeypatch.setattr(cli, "publish_messages", publish_mock)
     monkeypatch.setattr(
@@ -538,6 +549,34 @@ def test_publish_once_sends_discovery_availability_and_state(
     assert "ha_mqtt_agent/host/availability" in topics
     assert "ha_mqtt_agent/host/state" in topics
     assert "ha_mqtt_agent/host/location/attributes" in topics
+
+
+def test_publish_once_skips_location_attributes_when_location_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json", publish_location=False)
+    publish_mock = Mock()
+    monkeypatch.setattr(cli, "publish_messages", publish_mock)
+    monkeypatch.setattr(
+        cli,
+        "_sample_payload",
+        lambda _config, **_kwargs: {
+            "timestamp": "2026-05-17T10:00:00+00:00",
+            "power_w": 12.3,
+            "energy_kwh": 0.001,
+            "latitude": 45.4642,
+            "longitude": 9.19,
+            "location_accuracy_m": 35.0,
+        },
+    )
+
+    result = cli._handle_publish_once(config, skip_discovery=False)
+
+    assert result == 0
+    topics = [message.topic for message in publish_mock.call_args.args[1]]
+    assert "homeassistant/device_tracker/host_location/config" not in topics
+    assert "ha_mqtt_agent/host/location/attributes" not in topics
 
 
 def test_publish_once_defers_sampling_until_after_mqtt_connect(

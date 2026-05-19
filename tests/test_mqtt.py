@@ -85,6 +85,27 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert ping["unit_of_measurement"] == "ms"
     assert ping["value_template"] == "{{ value_json.ping_cloudflare_dns_ms }}"
 
+
+def test_discovery_messages_skip_location_entities_when_location_is_disabled() -> None:
+    config = AppConfig(device_id="workstation", publish_location=False)
+    topics = {message.topic for message in discovery_messages(config)}
+
+    assert "homeassistant/sensor/workstation_latitude/config" not in topics
+    assert "homeassistant/sensor/workstation_geocoded_location/config" not in topics
+    assert "homeassistant/binary_sensor/workstation_location_cached/config" not in topics
+    assert "homeassistant/device_tracker/workstation_location/config" not in topics
+
+
+def test_discovery_messages_define_location_entities_when_location_is_enabled() -> None:
+    config = AppConfig(
+        device_id="workstation",
+        device_name="Workstation",
+        publish_location=True,
+    )
+    messages = {
+        message.topic: json.loads(message.payload) for message in discovery_messages(config)
+    }
+
     latitude = messages["homeassistant/sensor/workstation_latitude/config"]
     assert latitude["unit_of_measurement"] == "°"
     assert latitude["value_template"] == "{{ value_json.latitude }}"

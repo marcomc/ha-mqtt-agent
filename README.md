@@ -240,9 +240,9 @@ ping_timeout_seconds = 1
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 state_path = "~/.local/state/ha-mqtt-agent/state.json"
 verbose = false
-home_ssids = ["Home WiFi", "Home WiFi 5G"]
-home_ipv4_cidrs = ["192.168.1.0/24"]
-home_gateways = ["192.168.1.1"]
+home_ssids = []
+home_ipv4_cidrs = []
+home_gateways = []
 home_bssids = []
 home_gateway_macs = []
 publish_location = false
@@ -278,6 +278,14 @@ Home-network presence is published as a binary sensor named
 `Home network present`. It turns on when any configured home SSID, BSSID, IPv4
 CIDR, default gateway, or gateway MAC matches the current local network sample.
 Leave lists empty to disable that specific match method.
+
+For example:
+
+```toml
+home_ssids = ["Home WiFi", "Home WiFi 5G"]
+home_ipv4_cidrs = ["192.168.1.0/24"]
+home_gateways = ["192.168.1.1"]
+```
 
 `publish_location` defaults to `false`. Set it to `true` only when you want this
 Mac to publish latitude, longitude, and horizontal accuracy to Home Assistant.

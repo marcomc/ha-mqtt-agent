@@ -22,7 +22,6 @@
     },
     "mqtt_client_id": {
       "type": "string",
-      "default": "ha-mqtt-agent-host",
       "description": "Optional MQTT client ID. If omitted, the agent derives ha-mqtt-agent-{device_id}."
     },
     "discovery_prefix": {

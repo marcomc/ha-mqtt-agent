@@ -103,9 +103,9 @@ expire_after_seconds = 15
 network_interval_seconds = 60
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 publish_retain = true
-home_ssids = ["Home WiFi", "Home WiFi 5G"]
-home_ipv4_cidrs = ["192.168.1.0/24"]
-home_gateways = ["192.168.1.1"]
+home_ssids = []
+home_ipv4_cidrs = []
+home_gateways = []
 home_bssids = []
 home_gateway_macs = []
 publish_location = false
@@ -145,6 +145,14 @@ agent reuses the matching cached geocoded address and marks
 If `mqtt_client_id` is not set, the agent derives it from `device_id`. Manual
 one-shot publish commands add a process suffix, so they do not disconnect the
 background LaunchAgent while you are checking MQTT discovery.
+
+Example home-network match values:
+
+```toml
+home_ssids = ["Home WiFi", "Home WiFi 5G"]
+home_ipv4_cidrs = ["192.168.1.0/24"]
+home_gateways = ["192.168.1.1"]
+```
 
 If your broker requires credentials, add:
 

@@ -23,7 +23,7 @@ class MqttMessage:
 
 
 def discovery_messages(config: AppConfig) -> list[MqttMessage]:
-    sensors = [
+    always_sensors = [
         {
             "object": "power",
             "name": "Power",
@@ -170,6 +170,46 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "template": "{{ value_json.gateway_macs }}",
         },
         {
+            "object": "ethernet_active_count",
+            "name": "Ethernet active count",
+            "unique": "ethernet_active_count",
+            "state_class": "measurement",
+            "template": "{{ value_json.ethernet_active_count }}",
+        },
+        {
+            "object": "ethernet_active_interfaces",
+            "name": "Ethernet active interfaces",
+            "unique": "ethernet_active_interfaces",
+            "template": "{{ value_json.ethernet_active_interfaces }}",
+        },
+    ]
+    sensors = list(always_sensors)
+    if config.publish_location:
+        sensors.extend(_location_sensor_specs())
+    sensors.extend(_ping_sensor_specs(config))
+    binary_sensors = [
+        {
+            "object": "home_network_present",
+            "name": "Home network present",
+            "unique": "home_network_present",
+            "device_class": "presence",
+            "template": "{{ value_json.home_network_present | tojson }}",
+        },
+    ]
+    if config.publish_location:
+        binary_sensors.extend(_location_binary_sensor_specs())
+    messages = [
+        *[_sensor_discovery_message(config, sensor) for sensor in sensors],
+        *[_binary_sensor_discovery_message(config, sensor) for sensor in binary_sensors],
+    ]
+    if config.publish_location:
+        messages.append(_device_tracker_discovery_message(config))
+    return messages
+
+
+def _location_sensor_specs() -> list[dict[str, str]]:
+    return [
+        {
             "object": "latitude",
             "name": "Latitude",
             "unique": "latitude",
@@ -242,29 +282,11 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "unique": "geocoded_location_error",
             "template": "{{ value_json.geocoded_location_error }}",
         },
-        {
-            "object": "ethernet_active_count",
-            "name": "Ethernet active count",
-            "unique": "ethernet_active_count",
-            "state_class": "measurement",
-            "template": "{{ value_json.ethernet_active_count }}",
-        },
-        {
-            "object": "ethernet_active_interfaces",
-            "name": "Ethernet active interfaces",
-            "unique": "ethernet_active_interfaces",
-            "template": "{{ value_json.ethernet_active_interfaces }}",
-        },
     ]
-    sensors.extend(_ping_sensor_specs(config))
-    binary_sensors = [
-        {
-            "object": "home_network_present",
-            "name": "Home network present",
-            "unique": "home_network_present",
-            "device_class": "presence",
-            "template": "{{ value_json.home_network_present | tojson }}",
-        },
+
+
+def _location_binary_sensor_specs() -> list[dict[str, str]]:
+    return [
         {
             "object": "location_cached",
             "name": "Location cached",
@@ -277,11 +299,6 @@ def discovery_messages(config: AppConfig) -> list[MqttMessage]:
             "unique": "geocoded_location_cached",
             "template": "{{ value_json.geocoded_location_cached | tojson }}",
         },
-    ]
-    return [
-        *[_sensor_discovery_message(config, sensor) for sensor in sensors],
-        *[_binary_sensor_discovery_message(config, sensor) for sensor in binary_sensors],
-        _device_tracker_discovery_message(config),
     ]
 
 

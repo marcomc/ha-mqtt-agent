@@ -685,9 +685,10 @@ def _publish_once(
         yield availability_message(config, "online")
         payload = _sample_payload(config, network_cache=network_cache)
         yield state_message(config, payload)
-        location_message = location_attributes_message(config, payload)
-        if location_message is not None:
-            yield location_message
+        if config.publish_location:
+            location_message = location_attributes_message(config, payload)
+            if location_message is not None:
+                yield location_message
 
     publish_messages(config, messages(), client_id_suffix=client_id_suffix)
 
