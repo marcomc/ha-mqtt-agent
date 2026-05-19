@@ -110,7 +110,7 @@ restart-agent: ## Restart the already installed macOS LaunchAgent
 agent-status: ## Show the macOS LaunchAgent status
 	@launchctl print "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
-uninstall: ## Remove the standalone runtime and user-facing symlink
+uninstall: uninstall-agent ## Stop the LaunchAgent and remove the standalone runtime
 	@rm -f "$(INSTALL_PATH)"
 	@rm -rf "$(APP_HOME)"
 	@echo "Removed $(INSTALL_PATH)"

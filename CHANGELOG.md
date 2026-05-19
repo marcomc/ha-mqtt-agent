@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `make install` is now the complete app install, while `make install-cli`
   installs only the standalone CLI runtime for development or partial setup.
+- Removed the old `make install-agent` alias so `make install` is the single
+  complete install command.
+- `make uninstall` now stops and removes the LaunchAgent before deleting the
+  standalone runtime.
 - Full installs now run the Wi-Fi authorization step after the helper is
   installed, so source reinstalls refresh the macOS permission prompt before
   the background service starts.
