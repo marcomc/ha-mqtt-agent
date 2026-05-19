@@ -185,6 +185,14 @@ def test_config_reads_home_network_and_location_options(tmp_path: Path) -> None:
     assert config.location_timeout_seconds == 2
 
 
+def test_config_rejects_ipv6_home_ipv4_cidrs(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('home_ipv4_cidrs = ["fd00::/64"]\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="home_ipv4_cidrs entries must be IPv4"):
+        load_config(config_path)
+
+
 def test_config_accepts_ping_targets_as_host_list(tmp_path: Path) -> None:
     config_path = tmp_path / "config.toml"
     config_path.write_text('ping_targets = ["1.1.1.1", "8.8.8.8"]\n', encoding="utf-8")

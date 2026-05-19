@@ -225,7 +225,9 @@ def _parse_string_list(value: object, *, key: str) -> tuple[str, ...]:
 def _parse_ipv4_cidrs(value: object) -> tuple[str, ...]:
     cidrs = _parse_string_list(value, key="home_ipv4_cidrs")
     for cidr in cidrs:
-        ip_network(cidr, strict=False)
+        network = ip_network(cidr, strict=False)
+        if network.version != 4:
+            raise ValueError("home_ipv4_cidrs entries must be IPv4 CIDR ranges.")
     return cidrs
 
 
