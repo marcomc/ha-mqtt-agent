@@ -32,7 +32,7 @@ if ! command -v codesign >/dev/null 2>&1; then
   exit 1
 fi
 
-make install-agent STANDALONE_PYTHON="${STANDALONE_PYTHON}"
+make install STANDALONE_PYTHON="${STANDALONE_PYTHON}"
 
 echo
 echo "Installed Home Assistant MQTT Agent."

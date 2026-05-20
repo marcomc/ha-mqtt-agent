@@ -22,7 +22,7 @@ MARKDOWN_FILES := README.md CHANGELOG.md TODO.md AGENTS.md docs/*.md
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check-deps check-install-deps sync install install-dev install-link install-config install-wifi-helper check-wifi-helper install-agent uninstall-agent restart-agent agent-status uninstall lint test check run clean
+.PHONY: help check-deps check-cli-install-deps check-install-deps sync install install-cli install-dev install-link install-config install-wifi-helper check-wifi-helper uninstall-agent restart-agent agent-status uninstall lint test check run clean
 
 help: ## Show available targets
 	@awk 'BEGIN { FS = ":.*##" } /^[a-zA-Z_-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -42,13 +42,11 @@ check-deps: ## Verify required local tools
 		echo "export PATH=\"$(BINDIR):\$$PATH\""; \
 	fi
 
-check-install-deps: ## Verify tools needed for the standalone install
+check-cli-install-deps: ## Verify tools needed for the standalone CLI install
 	@command -v "$(STANDALONE_PYTHON)" >/dev/null 2>&1 || { echo "$(STANDALONE_PYTHON) not found"; exit 1; }
 	@echo "Using standalone Python: $(STANDALONE_PYTHON)"
-	@command -v "$(SWIFTC)" >/dev/null 2>&1 || { echo "$(SWIFTC) not found. Install Xcode Command Line Tools."; exit 1; }
-	@command -v codesign >/dev/null 2>&1 || { echo "codesign not found. Install Xcode Command Line Tools."; exit 1; }
 	@$(STANDALONE_PYTHON) -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else "$(STANDALONE_PYTHON) must be Python 3.11 or newer")'
-	@mkdir -p "$(BINDIR)" "$(CONFIG_DIR)"
+	@mkdir -p "$(BINDIR)"
 	@if echo "$$PATH" | tr ':' '\n' | grep -Fxq "$(BINDIR)"; then \
 		echo "$(BINDIR) is on PATH"; \
 	else \
@@ -57,18 +55,25 @@ check-install-deps: ## Verify tools needed for the standalone install
 		echo "export PATH=\"$(BINDIR):\$$PATH\""; \
 	fi
 
+check-install-deps: check-cli-install-deps ## Verify tools needed for the full install
+	@command -v "$(SWIFTC)" >/dev/null 2>&1 || { echo "$(SWIFTC) not found. Install Xcode Command Line Tools."; exit 1; }
+	@command -v codesign >/dev/null 2>&1 || { echo "codesign not found. Install Xcode Command Line Tools."; exit 1; }
+
 $(VENV)/bin/python: pyproject.toml
 	@"$(UV)" sync --extra dev
 
 sync: $(VENV)/bin/python ## Sync the project environment
 
-install: check-install-deps install-wifi-helper ## Install a standalone user-facing runtime
+install: check-install-deps install-cli install-config install-wifi-helper ## Install the full user LaunchAgent
+	@./scripts/install-launch-agent.sh
+
+install-cli: check-cli-install-deps ## Install the standalone user-facing CLI runtime
 	@mkdir -p "$(APP_HOME)"
 	@rm -rf "$(APP_VENV)"
 	@"$(STANDALONE_PYTHON)" -m venv "$(APP_VENV)"
 	@"$(APP_PYTHON)" -m pip install --upgrade pip
 	@"$(APP_PYTHON)" -m pip install .
-	@$(MAKE) install-link install-config
+	@$(MAKE) install-link
 
 install-dev: check-deps sync ## Link the dev environment CLI into ~/.local/bin
 	@mkdir -p "$(BINDIR)"
@@ -96,9 +101,6 @@ install-wifi-helper: ## Install the macOS Wi-Fi SSID helper app
 check-wifi-helper: ## Build the macOS Wi-Fi SSID helper app for validation
 	@SWIFTC="$(SWIFTC)" ./scripts/build-wifi-helper.sh "$(abspath .build/check/HaMqttAgentWifiHelper.app)"
 
-install-agent: install ## Install and start the macOS LaunchAgent
-	@./scripts/install-launch-agent.sh
-
 uninstall-agent: ## Stop and remove the macOS LaunchAgent
 	@./scripts/uninstall-launch-agent.sh
 
@@ -108,7 +110,7 @@ restart-agent: ## Restart the already installed macOS LaunchAgent
 agent-status: ## Show the macOS LaunchAgent status
 	@launchctl print "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
 
-uninstall: ## Remove the standalone runtime and user-facing symlink
+uninstall: uninstall-agent ## Stop the LaunchAgent and remove the standalone runtime
 	@rm -f "$(INSTALL_PATH)"
 	@rm -rf "$(APP_HOME)"
 	@echo "Removed $(INSTALL_PATH)"

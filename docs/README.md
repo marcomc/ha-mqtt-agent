@@ -10,7 +10,7 @@
 ## Installer Shape
 
 `scripts/install.sh` is the user-facing entrypoint for a new Mac. It validates
-basic prerequisites and delegates to `make install-agent`.
+basic prerequisites and delegates to `make install`.
 
 The `Makefile` remains the durable automation API for install, restart, status,
 uninstall, development checks, and tests. Keep installer shell code thin so the
@@ -31,5 +31,5 @@ operational behavior is defined in one place.
    modules.
 2. Keep `README.md`, `CHANGELOG.md`, and `TODO.md` current as the project
    evolves.
-3. Preserve `make install-agent` as the durable service installation path unless
+3. Preserve `make install` as the durable service installation path unless
    you have a reason to redesign distribution.
