@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 
 import paho.mqtt.client as paho_mqtt
 import pytest
@@ -285,7 +286,7 @@ def test_publish_messages_raises_on_publish_failure(monkeypatch: pytest.MonkeyPa
     assert client.disconnected is True
 
 
-def test_probe_mqtt_connection_checks_broker_without_starting_publish_loop(
+def test_probe_mqtt_connection_checks_broker_connack_without_publishing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _FakeClient()
@@ -293,8 +294,23 @@ def test_probe_mqtt_connection_checks_broker_without_starting_publish_loop(
 
     probe_mqtt_connection(AppConfig())
 
-    assert client.loop_started is False
-    assert client.loop_stopped is False
+    assert client.loop_started is True
+    assert client.loop_stopped is True
+    assert client.published_topics == []
+    assert client.disconnected is True
+
+
+def test_probe_mqtt_connection_raises_on_connack_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient(connack_reason_code="Not authorized")
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    with pytest.raises(RuntimeError, match="MQTT CONNACK failed: Not authorized"):
+        probe_mqtt_connection(AppConfig())
+
+    assert client.loop_started is True
+    assert client.loop_stopped is True
     assert client.published_topics == []
     assert client.disconnected is True
 
@@ -314,13 +330,16 @@ class _FakeClient:
         *,
         connect_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
         publish_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
+        connack_reason_code: object = "Success",
     ) -> None:
         self.connect_rc = connect_rc
         self.publish_rc = publish_rc
+        self.connack_reason_code = connack_reason_code
         self.loop_started = False
         self.loop_stopped = False
         self.disconnected = False
         self.published_topics: list[str] = []
+        self.on_connect: Callable[[object, object, object, object, object], None] | None = None
 
     def username_pw_set(self, username: str, password: str | None = None) -> None:
         _ = (username, password)
@@ -332,8 +351,11 @@ class _FakeClient:
         _ = (host, port, keepalive)
         return self.connect_rc
 
-    def loop_start(self) -> None:
+    def loop_start(self) -> MQTTErrorCode:
         self.loop_started = True
+        if self.on_connect is not None:
+            self.on_connect(self, None, None, self.connack_reason_code, None)
+        return paho_mqtt.MQTT_ERR_SUCCESS
 
     def publish(
         self,
