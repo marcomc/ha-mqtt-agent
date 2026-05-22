@@ -773,7 +773,7 @@ def test_run_uses_recovery_probe_before_full_publish_after_failure(
     assert "publish failed: network is down" in captured.err
     assert "recovery probe failed: broker still unreachable" in captured.err
     assert publish_mock.call_count == 1
-    assert probe_mock.call_count == 1
+    probe_mock.assert_called_once_with(config)
     assert sleep_mock.call_args_list == [call(15.0), call(15.0)]
 
 

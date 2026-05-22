@@ -712,10 +712,7 @@ def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
     while True:
         if failure_count > 0:
             try:
-                probe_mqtt_connection(
-                    config,
-                    client_id_suffix=f"-recovery-{os.getpid()}",
-                )
+                probe_mqtt_connection(config)
             except Exception as exc:
                 print(f"recovery probe failed: {exc}", file=sys.stderr, flush=True)
                 time.sleep(_next_recovery_probe_delay(config))
