@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-05-22
+
+### Fixed in 0.1.3
+
+- MQTT recovery now uses a lightweight broker connection probe after publish
+  failures, so the LaunchAgent avoids full telemetry sampling while the broker
+  is still unreachable and resumes publishing promptly when the broker returns.
+- Recovery probes now reuse the normal runtime MQTT client ID so brokers with
+  exact client-ID ACLs do not block the self-healing path.
+- Recovery probes now wait for MQTT CONNACK so rejected credentials or client
+  authorization keep the agent in the lightweight recovery path.
+- MQTT retry backoff is now capped at 60 seconds instead of 300 seconds.
+
 ## [0.1.2] - 2026-05-20
 
 ### Changed in 0.1.2

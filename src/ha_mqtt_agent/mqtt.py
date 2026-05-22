@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any, SupportsFloat, SupportsIndex
@@ -13,6 +14,8 @@ from paho.mqtt.enums import CallbackAPIVersion
 
 from . import __version__
 from .config import AppConfig
+
+MQTT_PROBE_CONNACK_TIMEOUT_SECONDS = 5.0
 
 
 @dataclass(frozen=True)
@@ -391,10 +394,55 @@ def publish_messages(
         client.disconnect()
 
 
+def probe_mqtt_connection(config: AppConfig, *, client_id_suffix: str = "") -> None:
+    connack_received = threading.Event()
+    connack_reason_code: list[object] = []
+
+    def on_connect(
+        _client: mqtt.Client,
+        _userdata: object,
+        _flags: object,
+        reason_code: object,
+        _properties: object,
+    ) -> None:
+        connack_reason_code.append(reason_code)
+        connack_received.set()
+
+    client = mqtt.Client(
+        CallbackAPIVersion.VERSION2,
+        client_id=config.resolved_mqtt_client_id_with_suffix(client_id_suffix),
+    )
+    client.on_connect = on_connect
+    if config.mqtt_username is not None:
+        client.username_pw_set(config.mqtt_username, config.mqtt_password)
+
+    _raise_for_mqtt_error(
+        client.connect(config.mqtt_host, config.mqtt_port, keepalive=20),
+        "connect",
+    )
+    loop_started = False
+    try:
+        _raise_for_mqtt_error(client.loop_start(), "loop start")
+        loop_started = True
+        if not connack_received.wait(MQTT_PROBE_CONNACK_TIMEOUT_SECONDS):
+            raise TimeoutError("MQTT connect timed out waiting for CONNACK")
+        _raise_for_mqtt_connack(connack_reason_code[0])
+    finally:
+        if loop_started:
+            client.loop_stop()
+        client.disconnect()
+
+
 def _raise_for_mqtt_error(rc: int, action: str) -> None:
     if rc == mqtt.MQTT_ERR_SUCCESS:
         return
     raise RuntimeError(f"MQTT {action} failed: {mqtt.error_string(rc)}")
+
+
+def _raise_for_mqtt_connack(reason_code: object) -> None:
+    if reason_code == 0 or str(reason_code) == "Success":
+        return
+    raise RuntimeError(f"MQTT CONNACK failed: {reason_code}")
 
 
 def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMessage:

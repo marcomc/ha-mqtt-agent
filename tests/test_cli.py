@@ -4,7 +4,7 @@ import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -740,6 +740,7 @@ def test_run_keeps_running_after_publish_failure(
         raise KeyboardInterrupt
 
     monkeypatch.setattr(cli, "_publish_once", publish_once)
+    monkeypatch.setattr(cli, "probe_mqtt_connection", lambda *_args, **_kwargs: None)
     sleep_mock = Mock()
     monkeypatch.setattr("ha_mqtt_agent.cli.time.sleep", sleep_mock)
 
@@ -749,7 +750,31 @@ def test_run_keeps_running_after_publish_failure(
     captured = capsys.readouterr()
     assert "temporary network failure" in captured.err
     assert attempts["count"] == 2
-    sleep_mock.assert_called_once_with(30.0)
+    sleep_mock.assert_called_once_with(15.0)
+
+
+def test_run_uses_recovery_probe_before_full_publish_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    publish_mock = Mock(side_effect=OSError("network is down"))
+    probe_mock = Mock(side_effect=OSError("broker still unreachable"))
+    sleep_mock = Mock(side_effect=[None, KeyboardInterrupt])
+    monkeypatch.setattr(cli, "_publish_once", publish_mock)
+    monkeypatch.setattr(cli, "probe_mqtt_connection", probe_mock)
+    monkeypatch.setattr("ha_mqtt_agent.cli.time.sleep", sleep_mock)
+
+    with pytest.raises(KeyboardInterrupt):
+        cli._handle_run(config, skip_discovery=False, once=False)
+
+    captured = capsys.readouterr()
+    assert "publish failed: network is down" in captured.err
+    assert "recovery probe failed: broker still unreachable" in captured.err
+    assert publish_mock.call_count == 1
+    probe_mock.assert_called_once_with(config)
+    assert sleep_mock.call_args_list == [call(15.0), call(15.0)]
 
 
 def test_next_publish_delay_caps_without_large_integer_overflow() -> None:
@@ -757,4 +782,4 @@ def test_next_publish_delay_caps_without_large_integer_overflow() -> None:
 
     assert cli._next_publish_delay(config, 1) == 30.0
     assert cli._next_publish_delay(config, 2) == 60.0
-    assert cli._next_publish_delay(config, 10_000) == 300.0
+    assert cli._next_publish_delay(config, 10_000) == 60.0

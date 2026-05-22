@@ -21,6 +21,7 @@ from .mqtt import (
     availability_message,
     discovery_messages,
     location_attributes_message,
+    probe_mqtt_connection,
     publish_messages,
     state_message,
 )
@@ -28,8 +29,9 @@ from .network import NetworkSensorReader, NetworkSnapshotCache
 from .sensors import IoregSensorReader
 
 OPEN_PATH = "/usr/bin/open"
-MAX_PUBLISH_RETRY_SECONDS = 300.0
+MAX_PUBLISH_RETRY_SECONDS = 60.0
 MIN_PUBLISH_RETRY_SECONDS = 30.0
+MIN_RECOVERY_PROBE_SECONDS = 15.0
 LAST_LOCATION_KEY = "last_location"
 LAST_GEOCODED_LOCATION_KEY = "last_geocoded_location"
 GEOCODED_LOCATION_PAYLOAD_KEYS = {
@@ -708,6 +710,14 @@ def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
     network_cache = NetworkSnapshotCache()
     failure_count = 0
     while True:
+        if failure_count > 0:
+            try:
+                probe_mqtt_connection(config)
+            except Exception as exc:
+                print(f"recovery probe failed: {exc}", file=sys.stderr, flush=True)
+                time.sleep(_next_recovery_probe_delay(config))
+                continue
+
         try:
             _publish_once(
                 config,
@@ -725,7 +735,17 @@ def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
             failure_count = 0
         if once:
             return 0
-        time.sleep(_next_publish_delay(config, failure_count))
+        if failure_count > 0:
+            time.sleep(_next_recovery_probe_delay(config))
+        else:
+            time.sleep(config.sample_interval_seconds)
+
+
+def _next_recovery_probe_delay(config: AppConfig) -> float:
+    return min(
+        max(config.sample_interval_seconds, MIN_RECOVERY_PROBE_SECONDS),
+        MAX_PUBLISH_RETRY_SECONDS,
+    )
 
 
 def _next_publish_delay(config: AppConfig, failure_count: int) -> float:
