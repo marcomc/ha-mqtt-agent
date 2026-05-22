@@ -11,6 +11,7 @@ from ha_mqtt_agent.mqtt import (
     MqttMessage,
     discovery_messages,
     location_attributes_message,
+    probe_mqtt_connection,
     publish_messages,
     state_message,
 )
@@ -284,6 +285,20 @@ def test_publish_messages_raises_on_publish_failure(monkeypatch: pytest.MonkeyPa
     assert client.disconnected is True
 
 
+def test_probe_mqtt_connection_checks_broker_without_starting_publish_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient()
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    probe_mqtt_connection(AppConfig())
+
+    assert client.loop_started is False
+    assert client.loop_stopped is False
+    assert client.published_topics == []
+    assert client.disconnected is True
+
+
 class _FakePublishResult:
     def __init__(self, rc: MQTTErrorCode) -> None:
         self.rc = rc
@@ -305,6 +320,7 @@ class _FakeClient:
         self.loop_started = False
         self.loop_stopped = False
         self.disconnected = False
+        self.published_topics: list[str] = []
 
     def username_pw_set(self, username: str, password: str | None = None) -> None:
         _ = (username, password)
@@ -327,6 +343,7 @@ class _FakeClient:
         retain: bool,
     ) -> _FakePublishResult:
         _ = (topic, payload, qos, retain)
+        self.published_topics.append(topic)
         return _FakePublishResult(self.publish_rc)
 
     def loop_stop(self) -> None:

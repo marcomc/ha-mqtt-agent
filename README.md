@@ -275,6 +275,10 @@ unavailable after about three missed publishes.
 `network_interval_seconds` defaults to `60`; Wi-Fi, Ethernet, and ping probes
 are cached between those slower network samples while the normal telemetry loop
 keeps publishing. `ping_timeout_seconds` defaults to `1`.
+After an MQTT publish failure, the service uses a lightweight broker connection
+probe before trying the next full telemetry publish. This keeps local sampling
+quiet while the broker is unreachable and lets the LaunchAgent resume promptly
+when MQTT connectivity returns.
 If `mqtt_client_id` is omitted, the runtime MQTT client ID is derived from
 `device_id`; one-shot publish commands add a short process suffix so they do
 not disconnect the background LaunchAgent while you are debugging.
@@ -434,6 +438,10 @@ sensor.
 
 Sensors use `expire_after_seconds` in MQTT discovery. The default is `15`, so
 Home Assistant marks them unavailable after about three missed publishes.
+After MQTT publish failures, the LaunchAgent retries with a lightweight broker
+connection probe before doing another full telemetry sample. The recovery probe
+keeps running while the broker is unreachable and the retry backoff is capped at
+60 seconds.
 
 CPU, GPU, memory, SSD, palm-rest, and fan sensors are not exposed by the
 default LaunchAgent because macOS does not provide those detailed thermal
@@ -511,6 +519,12 @@ nc -vz mqtt.example.local 1883
 If Home Assistant still shows stale values, confirm the discovery payload has
 the expected `expire_after` value and restart the LaunchAgent after config
 changes.
+
+If Home Assistant shows the Mac as unavailable and the LaunchAgent is still
+running, check whether the log contains MQTT reachability errors such as
+`No route to host`, DNS lookup failures, or connection-loss messages. The
+service will keep using lightweight recovery probes until the broker is
+reachable again.
 
 ## Development
 

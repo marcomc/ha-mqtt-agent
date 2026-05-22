@@ -124,6 +124,10 @@ unavailable after about three missed publishes.
 checks are cached between these network samples. Each `ping_targets` entry gets
 its own Home Assistant latency sensor. `wifi_helper_path` points to the bundled
 helper app installed by `make install`.
+After an MQTT publish failure, the service uses a lightweight broker connection
+probe before trying the next full telemetry publish. This avoids local sampling
+while the broker remains unreachable and lets the LaunchAgent resume promptly
+when MQTT connectivity returns.
 
 The `home_*` lists drive the `Home network present` binary sensor. It turns on
 when any configured SSID, BSSID, IPv4 CIDR, gateway address, or gateway MAC
@@ -363,7 +367,10 @@ Then verify broker reachability from the Mac:
 nc -vz mqtt.example.local 1883
 ```
 
-Temporary broker or network failures are retried by the service loop.
+Temporary broker or network failures are retried by the service loop. After a
+publish failure, the LaunchAgent uses lightweight broker connection probes
+before doing another full telemetry publish, and the retry backoff is capped at
+60 seconds.
 
 ### The device alternates between available and unavailable
 

@@ -391,6 +391,21 @@ def publish_messages(
         client.disconnect()
 
 
+def probe_mqtt_connection(config: AppConfig, *, client_id_suffix: str = "") -> None:
+    client = mqtt.Client(
+        CallbackAPIVersion.VERSION2,
+        client_id=config.resolved_mqtt_client_id_with_suffix(client_id_suffix),
+    )
+    if config.mqtt_username is not None:
+        client.username_pw_set(config.mqtt_username, config.mqtt_password)
+
+    _raise_for_mqtt_error(
+        client.connect(config.mqtt_host, config.mqtt_port, keepalive=20),
+        "connect",
+    )
+    client.disconnect()
+
+
 def _raise_for_mqtt_error(rc: int, action: str) -> None:
     if rc == mqtt.MQTT_ERR_SUCCESS:
         return
