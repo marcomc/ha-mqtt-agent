@@ -3,6 +3,8 @@ set -eu
 
 SERVICE_NAME="ha-mqtt-agent"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+APP_HOME="/opt/ha-mqtt-agent"
+BINARY_PATH="/usr/local/bin/ha-mqtt-agent"
 
 OS_NAME=$(uname -s)
 CURRENT_UID=$(id -u)
@@ -36,9 +38,14 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 run_root rm -f "${SERVICE_FILE}"
+run_root rm -f "${BINARY_PATH}"
+run_root rm -rf "${APP_HOME}"
 
 if command -v systemctl >/dev/null 2>&1; then
   run_root systemctl daemon-reload
 fi
 
 echo "Stopped and removed ${SERVICE_NAME}"
+echo "Removed runtime: ${APP_HOME}"
+echo "Removed binary: ${BINARY_PATH}"
+echo "Preserved config/state under /etc/ha-mqtt-agent and /var/lib/ha-mqtt-agent"

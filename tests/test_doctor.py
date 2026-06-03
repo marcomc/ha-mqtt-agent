@@ -80,6 +80,34 @@ def test_doctor_cli_can_emit_json(
     assert payload["capabilities"][0]["id"] == "uptime"
 
 
+def test_doctor_linux_tool_report_includes_optional_provider_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        "ha_mqtt_agent.doctor.shutil.which",
+        lambda command: f"/usr/bin/{command}",
+    )
+
+    report, exit_code = build_doctor_report(
+        config=AppConfig(),
+        config_path=tmp_path / "missing.toml",
+        provider=_UptimeProvider(),
+        system_name="Linux",
+    )
+
+    assert exit_code == 0
+    assert {item["name"] for item in report["tools"]} == {
+        "ip",
+        "iw",
+        "nmcli",
+        "ping",
+        "sensors",
+        "systemctl",
+        "upower",
+    }
+
+
 class _UptimeProvider:
     provider_id = "test"
 

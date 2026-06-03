@@ -14,6 +14,7 @@ APP_PYTHON="${APP_VENV}/bin/python"
 BINARY_PATH="/usr/local/bin/ha-mqtt-agent"
 KNOWN_OPTIONAL_PACKAGES=" iw lm-sensors upower "
 RECOMMENDED_OPTIONAL_PACKAGES="iw lm-sensors upower"
+NOLOGIN_PATH="/usr/sbin/nologin"
 
 PROJECT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 NON_INTERACTIVE=0
@@ -74,6 +75,14 @@ fi
 if [ "${CURRENT_UID}" -ne 0 ] && ! command -v sudo >/dev/null 2>&1; then
   echo "sudo not found; run as root or install sudo for setup." >&2
   exit 1
+fi
+
+if [ ! -x "${NOLOGIN_PATH}" ]; then
+  if [ -x /sbin/nologin ]; then
+    NOLOGIN_PATH="/sbin/nologin"
+  else
+    NOLOGIN_PATH="/bin/false"
+  fi
 fi
 
 run_root() {
@@ -175,8 +184,17 @@ cd "${PROJECT_ROOT}"
 OPTIONAL_TO_INSTALL=$(optional_packages_to_install)
 install_optional_packages "${OPTIONAL_TO_INSTALL}"
 
+if ! getent group "${SERVICE_USER}" >/dev/null 2>&1; then
+  run_root groupadd --system "${SERVICE_USER}"
+fi
+
 if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
-  run_root useradd --system --home-dir "${STATE_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
+  run_root useradd \
+    --system \
+    --gid "${SERVICE_USER}" \
+    --home-dir "${STATE_DIR}" \
+    --shell "${NOLOGIN_PATH}" \
+    "${SERVICE_USER}"
 fi
 
 run_root install -d -m 0755 "${APP_HOME}" "$(dirname -- "${BINARY_PATH}")" "${CONFIG_DIR}"

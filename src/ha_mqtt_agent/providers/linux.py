@@ -23,6 +23,7 @@ IP_COMMAND = "ip"
 IW_COMMAND = "iw"
 NMCLI_COMMAND = "nmcli"
 PING_COMMAND = "ping"
+UPOWER_COMMAND = "upower"
 
 LinuxCommandRunner = Callable[[Sequence[str], float], "LinuxCommandResult | None"]
 
@@ -589,7 +590,7 @@ class LinuxProvider:
     def _read_battery_status(self) -> LinuxBatteryStatus | None:
         battery_path = self._battery_path()
         if battery_path is None:
-            return None
+            return self._read_upower_battery_status()
         charge_full = _int_file(battery_path / "charge_full")
         charge_design = _int_file(battery_path / "charge_full_design")
         energy_full = _int_file(battery_path / "energy_full")
@@ -609,8 +610,12 @@ class LinuxProvider:
     def _battery_capability_ids(self) -> tuple[str, ...]:
         battery_path = self._battery_path()
         if battery_path is None:
-            return ()
-        capabilities = ["battery", "battery_status"]
+            return self._upower_battery_capability_ids()
+        capabilities = []
+        if (battery_path / "capacity").exists():
+            capabilities.append("battery")
+        if (battery_path / "status").exists():
+            capabilities.append("battery_status")
         if _has_any_file(battery_path, ("charge_full", "energy_full")) and _has_any_file(
             battery_path,
             ("charge_full_design", "energy_full_design"),
@@ -625,6 +630,64 @@ class LinuxProvider:
         if (battery_path / "cycle_count").exists():
             capabilities.append("battery_cycle_count")
         return tuple(capabilities)
+
+    def _read_upower_battery_status(self) -> LinuxBatteryStatus | None:
+        fields = self._upower_battery_fields()
+        if fields is None:
+            return None
+        energy_full = _upower_float(fields.get("energy-full"))
+        energy_design = _upower_float(fields.get("energy-full-design"))
+        return LinuxBatteryStatus(
+            capacity_percent=_upower_int_percent(fields.get("percentage")),
+            max_capacity_percent=_upower_percent(fields.get("capacity"))
+            or _capacity_percent(full=energy_full, design=energy_design),
+            max_capacity_mah=None,
+            design_capacity_mah=None,
+            temperature_c=_upower_float(fields.get("temperature")),
+            cycle_count=_upower_int(fields.get("charge-cycles")),
+            status=_linux_battery_status(fields.get("state")),
+        )
+
+    def _upower_battery_capability_ids(self) -> tuple[str, ...]:
+        fields = self._upower_battery_fields()
+        if fields is None:
+            return ()
+        capabilities = []
+        if _upower_int_percent(fields.get("percentage")) is not None:
+            capabilities.append("battery")
+        if _upower_percent(fields.get("capacity")) is not None or (
+            _upower_float(fields.get("energy-full")) is not None
+            and _upower_float(fields.get("energy-full-design")) is not None
+        ):
+            capabilities.append("battery_max_capacity")
+        if _upower_float(fields.get("temperature")) is not None:
+            capabilities.append("battery_temperature")
+        if _upower_int(fields.get("charge-cycles")) is not None:
+            capabilities.append("battery_cycle_count")
+        if _linux_battery_status(fields.get("state")) is not None:
+            capabilities.append("battery_status")
+        return tuple(capabilities)
+
+    def _upower_battery_fields(self) -> dict[str, str] | None:
+        device = self._upower_battery_device()
+        if device is None:
+            return None
+        result = self._run([UPOWER_COMMAND, "-i", device], LINUX_COMMAND_TIMEOUT_SECONDS)
+        if result is None or result.returncode != 0:
+            return None
+        return _parse_upower_fields(result.stdout)
+
+    def _upower_battery_device(self) -> str | None:
+        if not self._command_available(UPOWER_COMMAND):
+            return None
+        result = self._run([UPOWER_COMMAND, "-e"], LINUX_COMMAND_TIMEOUT_SECONDS)
+        if result is None or result.returncode != 0:
+            return None
+        for raw_line in result.stdout.splitlines():
+            device = raw_line.strip()
+            if "battery" in device.casefold():
+                return device
+        return None
 
     def _battery_path(self) -> Path | None:
         power_path = self._path("sys/class/power_supply")
@@ -684,7 +747,9 @@ class LinuxProvider:
         return self._command_available(IP_COMMAND) or self._path("sys/class/net").exists()
 
     def _wifi_supported(self) -> bool:
-        return bool(self._wireless_interfaces()) or self._command_available(IW_COMMAND)
+        return bool(self._wireless_interfaces()) or (
+            self._command_available(IW_COMMAND) and self._wireless_interface_from_iw() is not None
+        )
 
     def _command_available(self, command: str) -> bool:
         if self.available_commands is not None:
@@ -868,11 +933,50 @@ def _linux_battery_status(value: str | None) -> str | None:
         return "charging"
     if normalized == "discharging":
         return "discharging"
-    if normalized == "full":
+    if normalized in {"full", "fully-charged"}:
         return "charged"
     if normalized in {"not charging", "unknown"}:
         return "plugged_in"
     return normalized or None
+
+
+def _parse_upower_fields(output: str) -> dict[str, str]:
+    fields = {}
+    for raw_line in output.splitlines():
+        if ":" not in raw_line:
+            continue
+        key, value = raw_line.split(":", 1)
+        normalized_key = key.strip().casefold()
+        if normalized_key:
+            fields[normalized_key] = value.strip()
+    return fields
+
+
+def _upower_percent(value: str | None) -> float | None:
+    return _upower_float(value)
+
+
+def _upower_int_percent(value: str | None) -> int | None:
+    percent = _upower_percent(value)
+    if percent is None:
+        return None
+    return round(percent)
+
+
+def _upower_int(value: str | None) -> int | None:
+    parsed = _upower_float(value)
+    if parsed is None:
+        return None
+    return round(parsed)
+
+
+def _upower_float(value: str | None) -> float | None:
+    if value is None:
+        return None
+    match = re.search(r"-?\d+(?:\.\d+)?", value)
+    if match is None:
+        return None
+    return float(match.group(0))
 
 
 def _battery_temperature_c(value: int | None) -> float | None:
@@ -893,7 +997,7 @@ def _thermal_temperature_c(value: int | None) -> float | None:
     return float(value)
 
 
-def _capacity_percent(*, full: int | None, design: int | None) -> float | None:
+def _capacity_percent(*, full: int | float | None, design: int | float | None) -> float | None:
     if full is None or design is None or design <= 0:
         return None
     return full / design * 100

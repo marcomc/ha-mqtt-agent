@@ -10,6 +10,7 @@ from ha_mqtt_agent.providers.linux import (
     IW_COMMAND,
     NMCLI_COMMAND,
     PING_COMMAND,
+    UPOWER_COMMAND,
     LinuxCommandResult,
     LinuxProvider,
 )
@@ -132,6 +133,30 @@ def test_linux_provider_keeps_supported_wifi_entities_unavailable_when_reads_fai
     assert availability["wifi_signal_dbm"] == "offline"
 
 
+def test_linux_provider_does_not_discover_wifi_without_wireless_interface(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/uptime", "1.00 1.00\n")
+    runner = FakeLinuxRunner(
+        {
+            (IW_COMMAND, "dev"): LinuxCommandResult(stdout="", returncode=0),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({IW_COMMAND}),
+    )
+
+    supported = provider.supported_capability_ids(AppConfig(ping_targets=()))
+    payload = provider.sample(AppConfig(ping_targets=()), update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert "wifi_ssid" not in supported
+    assert "wifi_ssid" not in payload
+    assert "wifi_signal_dbm" not in availability
+
+
 def test_linux_provider_reads_battery_from_real_sysfs_fields(tmp_path: Path) -> None:
     battery = tmp_path / "sys/class/power_supply/BAT0"
     _write(battery / "type", "Battery\n")
@@ -160,6 +185,72 @@ def test_linux_provider_reads_battery_from_real_sysfs_fields(tmp_path: Path) -> 
     assert availability["battery"] == "online"
     assert "power" not in availability
     assert "energy" not in availability
+
+
+def test_linux_provider_discovers_only_real_sysfs_battery_fields(tmp_path: Path) -> None:
+    battery = tmp_path / "sys/class/power_supply/BAT0"
+    _write(battery / "type", "Battery\n")
+    _write(battery / "status", "Charging\n")
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner({}),
+        available_commands=frozenset(),
+    )
+
+    payload = provider.sample(AppConfig(ping_targets=()), update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert "battery" not in provider.supported_capability_ids(AppConfig(ping_targets=()))
+    assert "battery_percent" not in payload
+    assert payload["battery_status"] == "charging"
+    assert "battery" not in availability
+    assert availability["battery_status"] == "online"
+
+
+def test_linux_provider_reads_battery_from_upower_when_sysfs_is_absent(
+    tmp_path: Path,
+) -> None:
+    battery_device = "/org/freedesktop/UPower/devices/battery_BAT0"
+    runner = FakeLinuxRunner(
+        {
+            (UPOWER_COMMAND, "-e"): LinuxCommandResult(
+                stdout=f"{battery_device}\n",
+                returncode=0,
+            ),
+            (UPOWER_COMMAND, "-i", battery_device): LinuxCommandResult(
+                stdout=(
+                    "  native-path:          BAT0\n"
+                    "  state:                discharging\n"
+                    "  percentage:           87%\n"
+                    "  capacity:             84%\n"
+                    "  temperature:          31.5 degrees C\n"
+                    "  charge-cycles:        42\n"
+                    "  energy-full:          42.0 Wh\n"
+                    "  energy-full-design:   50.0 Wh\n"
+                ),
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({UPOWER_COMMAND}),
+    )
+
+    payload = provider.sample(AppConfig(ping_targets=()), update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert payload["battery_percent"] == 87
+    assert payload["battery_max_capacity_percent"] == 84
+    assert "battery_max_capacity_mah" not in payload
+    assert "battery_design_capacity_mah" not in payload
+    assert payload["battery_temperature_c"] == 31.5
+    assert payload["battery_cycle_count"] == 42
+    assert payload["battery_status"] == "discharging"
+    assert availability["battery"] == "online"
+    assert availability["battery_max_capacity"] == "online"
+    assert "battery_max_capacity_mah" not in availability
 
 
 def test_linux_provider_uses_nmcli_for_wifi_on_networkmanager_hosts(

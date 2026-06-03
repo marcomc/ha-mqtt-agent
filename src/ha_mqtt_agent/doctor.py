@@ -173,7 +173,7 @@ def _service_manager(system_name: str) -> str | None:
 def _tool_report(system_name: str) -> list[dict[str, object]]:
     tools = {
         "Darwin": ("ioreg", "networksetup", "launchctl", "swiftc", "codesign"),
-        "Linux": ("ip", "iw", "nmcli", "ping", "systemctl"),
+        "Linux": ("ip", "iw", "nmcli", "ping", "sensors", "systemctl", "upower"),
     }.get(system_name, ())
     return [{"name": tool, "available": shutil.which(tool) is not None} for tool in tools]
 

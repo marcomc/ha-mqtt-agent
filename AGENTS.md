@@ -75,6 +75,11 @@ Expected checks:
   separate from current readings: unsupported capabilities must be omitted from
   discovery and state availability, while supported-but-failing readings remain
   discovered and report per-entity unavailable.
+- When adding Linux provider capabilities, test optional tools present without
+  matching hardware and hardware present without optional tools. Installed tools
+  alone must not create discovery entities.
+- When changing platform install paths, keep uninstall symmetric for runtime
+  artifacts and preserve user config/state unless the command documents removal.
 
 ## Release Hygiene
 
