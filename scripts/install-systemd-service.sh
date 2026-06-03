@@ -135,7 +135,7 @@ optional_packages_to_install() {
     return 0
   fi
 
-  printf 'Install optional sensor packages (%s)? [y/N] ' "${RECOMMENDED_OPTIONAL_PACKAGES}"
+  printf 'Install optional sensor packages (%s)? [y/N] ' "${RECOMMENDED_OPTIONAL_PACKAGES}" >&2
   read -r answer
   case "${answer}" in
     y|Y|yes|YES)

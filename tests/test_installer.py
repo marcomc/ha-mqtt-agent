@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from ha_mqtt_agent.installer import (
@@ -10,6 +12,15 @@ from ha_mqtt_agent.installer import (
     optional_package_install_command,
     plan_linux_install,
 )
+
+
+def test_systemd_installer_interactive_prompt_is_not_captured_as_package() -> None:
+    script = Path("scripts/install-systemd-service.sh").read_text(encoding="utf-8")
+
+    assert (
+        "printf 'Install optional sensor packages (%s)? [y/N] ' "
+        '"${RECOMMENDED_OPTIONAL_PACKAGES}" >&2'
+    ) in script
 
 
 def test_linux_install_plan_uses_systemd_service_paths_without_optional_packages() -> None:
