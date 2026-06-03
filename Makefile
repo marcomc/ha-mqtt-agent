@@ -121,7 +121,7 @@ uninstall-agent: ## Stop and remove the platform service
 restart-agent: ## Restart the already installed macOS LaunchAgent
 	@case "$$(uname -s)" in \
 		Darwin) launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent" ;; \
-		Linux) sudo systemctl restart ha-mqtt-agent ;; \
+		Linux) if [ "$$(id -u)" -eq 0 ]; then systemctl restart ha-mqtt-agent; else sudo systemctl restart ha-mqtt-agent; fi ;; \
 		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
 	esac
 

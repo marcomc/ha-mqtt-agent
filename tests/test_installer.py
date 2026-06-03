@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,17 @@ def test_systemd_installer_interactive_prompt_is_not_captured_as_package() -> No
         "printf 'Install optional sensor packages (%s)? [y/N] ' "
         '"${RECOMMENDED_OPTIONAL_PACKAGES}" >&2'
     ) in script
+
+
+def test_makefile_linux_restart_agent_works_without_sudo_when_root() -> None:
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+
+    assert re.search(
+        r'Linux\) if \[ "\$\$\(id -u\)" -eq 0 \]; '
+        r"then systemctl restart ha-mqtt-agent; "
+        r"else sudo systemctl restart ha-mqtt-agent; fi ;;",
+        makefile,
+    )
 
 
 def test_linux_install_plan_uses_systemd_service_paths_without_optional_packages() -> None:

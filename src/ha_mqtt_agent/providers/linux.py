@@ -526,30 +526,59 @@ class LinuxProvider:
     def _wifi_status_from_iw(self, interface: str | None) -> LinuxWifiStatus:
         if not self._command_available(IW_COMMAND):
             return LinuxWifiStatus(interface=interface, ssid=None, signal_dbm=None, bssid=None)
-        resolved_interface = interface or self._wireless_interface_from_iw()
-        if resolved_interface is None:
+        candidates = self._wireless_interface_candidates(interface)
+        if not candidates:
             return LinuxWifiStatus(interface=None, ssid=None, signal_dbm=None, bssid=None)
-        result = self._run(
-            [IW_COMMAND, "dev", resolved_interface, "link"],
-            LINUX_COMMAND_TIMEOUT_SECONDS,
+        fallback = LinuxWifiStatus(
+            interface=candidates[0],
+            ssid=None,
+            signal_dbm=None,
+            bssid=None,
         )
-        if result is None or result.returncode != 0:
-            return LinuxWifiStatus(
-                interface=resolved_interface,
-                ssid=None,
-                signal_dbm=None,
-                bssid=None,
+        for resolved_interface in candidates:
+            result = self._run(
+                [IW_COMMAND, "dev", resolved_interface, "link"],
+                LINUX_COMMAND_TIMEOUT_SECONDS,
             )
-        return _parse_iw_link(result.stdout, interface=resolved_interface)
+            if result is None or result.returncode != 0:
+                continue
+            status = _parse_iw_link(result.stdout, interface=resolved_interface)
+            if _wifi_status_has_reading(status):
+                return status
+            fallback = status
+        return fallback
 
     def _wireless_interface_from_iw(self) -> str | None:
+        interfaces = self._wireless_interfaces_from_iw()
+        return interfaces[0] if interfaces else None
+
+    def _wireless_interfaces_from_iw(self) -> tuple[str, ...]:
         result = self._run([IW_COMMAND, "dev"], LINUX_COMMAND_TIMEOUT_SECONDS)
         if result is None or result.returncode != 0:
-            return None
-        match = re.search(r"^\s*Interface\s+(\S+)", result.stdout, flags=re.MULTILINE)
-        if match is None:
-            return None
-        return match.group(1)
+            return ()
+        return tuple(
+            dict.fromkeys(
+                match.group(1)
+                for match in re.finditer(
+                    r"^\s*Interface\s+(\S+)",
+                    result.stdout,
+                    flags=re.MULTILINE,
+                )
+            )
+        )
+
+    def _wireless_interface_candidates(self, preferred: str | None) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(
+                interface
+                for interface in (
+                    preferred,
+                    *self._wireless_interfaces(),
+                    *self._wireless_interfaces_from_iw(),
+                )
+                if interface is not None
+            )
+        )
 
     def _wifi_status_from_nmcli(self, interface: str | None) -> LinuxWifiStatus:
         if not self._command_available(NMCLI_COMMAND):
@@ -617,7 +646,7 @@ class LinuxProvider:
         readings = _parse_proc_net_wireless(text)
         if not readings:
             return LinuxWifiStatus(interface=interface, ssid=None, signal_dbm=None, bssid=None)
-        resolved_interface = interface or next(iter(readings))
+        resolved_interface = interface if interface in readings else next(iter(readings))
         return LinuxWifiStatus(
             interface=resolved_interface,
             ssid=None,

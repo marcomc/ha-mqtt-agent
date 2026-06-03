@@ -248,6 +248,47 @@ def test_linux_provider_does_not_discover_wifi_without_wireless_interface(
     assert "wifi_signal_dbm" not in availability
 
 
+def test_linux_provider_tries_later_wireless_interfaces_when_iw_first_is_disconnected(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "sys/class/net/wlan0/wireless/.keep", "")
+    _write(tmp_path / "sys/class/net/wlan1/wireless/.keep", "")
+    runner = FakeLinuxRunner(
+        {
+            (IW_COMMAND, "dev"): LinuxCommandResult(
+                stdout="phy#0\n\tInterface wlan0\nphy#1\n\tInterface wlan1\n",
+                returncode=0,
+            ),
+            (IW_COMMAND, "dev", "wlan0", "link"): LinuxCommandResult(
+                stdout="Not connected.\n",
+                returncode=0,
+            ),
+            (IW_COMMAND, "dev", "wlan1", "link"): LinuxCommandResult(
+                stdout=(
+                    "Connected to 00:11:22:33:44:66 (on wlan1)\n"
+                    "\tSSID: Office WiFi\n"
+                    "\tsignal: -61 dBm\n"
+                ),
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({IW_COMMAND}),
+    )
+
+    payload = provider.sample(AppConfig(ping_targets=()), update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert payload["wifi_interface"] == "wlan1"
+    assert payload["wifi_ssid"] == "Office WiFi"
+    assert payload["wifi_bssid"] == "00:11:22:33:44:66"
+    assert payload["wifi_signal_dbm"] == -61
+    assert availability["wifi_ssid"] == "online"
+
+
 def test_linux_provider_reads_battery_from_real_sysfs_fields(tmp_path: Path) -> None:
     battery = tmp_path / "sys/class/power_supply/BAT0"
     _write(battery / "type", "Battery\n")
