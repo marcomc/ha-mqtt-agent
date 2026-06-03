@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import cast
 
 from ha_mqtt_agent.config import AppConfig, PingTarget
+from ha_mqtt_agent.network import NetworkSnapshotCache
 from ha_mqtt_agent.providers.linux import (
     IP_COMMAND,
     IW_COMMAND,
@@ -110,6 +111,64 @@ def test_linux_provider_reads_uptime_network_wifi_ping_and_cpu_temperature(
     assert "energy" not in availability
 
 
+def test_linux_provider_uses_network_cache_for_network_wifi_and_ping(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/uptime", "12345.67 100.00\n")
+    _write(tmp_path / "sys/class/net/wlan0/wireless/.keep", "")
+    config = AppConfig(
+        network_interval_seconds=60,
+        ping_targets=(PingTarget(id="router", host="192.168.1.1", name="Router"),),
+    )
+    runner = FakeLinuxRunner(
+        {
+            (IP_COMMAND, "-j", "addr", "show"): LinuxCommandResult(
+                stdout=(
+                    '[{"ifname":"wlan0","operstate":"UP",'
+                    '"addr_info":[{"family":"inet","local":"192.168.1.21"}]}]'
+                ),
+                returncode=0,
+            ),
+            (IP_COMMAND, "-j", "route", "show", "default"): LinuxCommandResult(
+                stdout='[{"gateway":"192.168.1.1","dev":"wlan0"}]',
+                returncode=0,
+            ),
+            (IP_COMMAND, "neigh", "show", "192.168.1.1"): LinuxCommandResult(
+                stdout="192.168.1.1 dev wlan0 lladdr aa:bb:cc:dd:ee:ff REACHABLE\n",
+                returncode=0,
+            ),
+            (IW_COMMAND, "dev", "wlan0", "link"): LinuxCommandResult(
+                stdout=(
+                    "Connected to 00:11:22:33:44:55 (on wlan0)\n"
+                    "\tSSID: Office WiFi\n"
+                    "\tsignal: -58 dBm\n"
+                ),
+                returncode=0,
+            ),
+            (PING_COMMAND, "-n", "-c", "1", "-W", "1", "192.168.1.1"): LinuxCommandResult(
+                stdout="64 bytes from 192.168.1.1: icmp_seq=1 ttl=64 time=4.321 ms\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({IP_COMMAND, IW_COMMAND, PING_COMMAND}),
+    )
+    network_cache = NetworkSnapshotCache()
+
+    first = provider.sample(config, update_energy=False, network_cache=network_cache)
+    second = provider.sample(config, update_energy=False, network_cache=network_cache)
+
+    assert first.state_payload()["wifi_ssid"] == "Office WiFi"
+    assert second.state_payload()["ping_router_ms"] == 4.321
+    assert runner.commands.count((IP_COMMAND, "-j", "addr", "show")) == 1
+    assert runner.commands.count((IP_COMMAND, "-j", "route", "show", "default")) == 1
+    assert runner.commands.count((IW_COMMAND, "dev", "wlan0", "link")) == 1
+    assert runner.commands.count((PING_COMMAND, "-n", "-c", "1", "-W", "1", "192.168.1.1")) == 1
+
+
 def test_linux_provider_keeps_supported_wifi_entities_unavailable_when_reads_fail(
     tmp_path: Path,
 ) -> None:
@@ -131,6 +190,38 @@ def test_linux_provider_keeps_supported_wifi_entities_unavailable_when_reads_fai
     assert availability["wifi_ssid"] == "offline"
     assert availability["wifi_bssid"] == "offline"
     assert availability["wifi_signal_dbm"] == "offline"
+
+
+def test_linux_provider_marks_ipv4_unavailable_for_sysfs_only_interfaces(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "sys/class/net/eth0/operstate", "up\n")
+    _write(
+        tmp_path / "proc/net/route",
+        (
+            "Iface Destination Gateway Flags RefCnt Use Metric Mask MTU Window IRTT\n"
+            "eth0 00000000 0101A8C0 0003 0 0 0 00000000 0 0 0\n"
+        ),
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner({}),
+        available_commands=frozenset(),
+    )
+
+    payload = provider.sample(
+        AppConfig(home_ipv4_cidrs=("192.168.1.0/24",), ping_targets=()),
+        update_energy=False,
+    ).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert payload["ipv4_addresses"] == ""
+    assert payload["ethernet_active_count"] == 1
+    assert payload["default_gateways"] == "192.168.1.1"
+    assert availability["ipv4_addresses"] == "offline"
+    assert availability["ethernet_active_count"] == "online"
+    assert availability["default_gateways"] == "online"
+    assert availability["home_network_present"] == "offline"
 
 
 def test_linux_provider_does_not_discover_wifi_without_wireless_interface(

@@ -38,7 +38,7 @@ class LinuxCommandResult:
 class LinuxInterface:
     name: str
     operstate: str | None
-    ipv4_addresses: tuple[str, ...]
+    ipv4_addresses: tuple[str, ...] | None
 
 
 @dataclass(frozen=True)
@@ -69,6 +69,12 @@ class LinuxBatteryStatus:
     temperature_c: float | None
     cycle_count: int | None
     status: str | None
+
+
+@dataclass(frozen=True)
+class LinuxNetworkSample:
+    payload: dict[str, object]
+    errors: dict[str, str]
 
 
 @dataclass
@@ -126,7 +132,7 @@ class LinuxProvider:
         network_cache: NetworkSnapshotCache | None = None,
         payload_postprocessor: PayloadPostprocessor | None = None,
     ) -> CapabilitySnapshot:
-        _ = (update_energy, network_cache)
+        _ = update_energy
         supported = self.supported_capability_ids(config)
         payload: dict[str, object] = {
             "timestamp": datetime.now(UTC).isoformat(),
@@ -140,21 +146,14 @@ class LinuxProvider:
             if uptime is None:
                 errors["uptime"] = "/proc/uptime unavailable"
 
-        if any(_is_network_capability(capability_id) for capability_id in supported):
-            payload.update(self._network_payload(config=config, errors=errors))
-
-        if any(capability_id.startswith("wifi_") for capability_id in supported):
-            payload.update(self._wifi_payload(errors=errors))
-
-        if any(capability_id.startswith("ping_") for capability_id in supported):
-            for target in config.ping_targets:
-                capability_id = f"ping_{target.id}"
-                if capability_id not in supported:
-                    continue
-                latency_ms = self._ping(target, config.ping_timeout_seconds)
-                payload[f"ping_{target.id}_ms"] = _round_optional(latency_ms, 3)
-                if latency_ms is None:
-                    errors[capability_id] = f"ping {target.host} unavailable"
+        if any(_is_linux_network_sample_capability(capability_id) for capability_id in supported):
+            network_sample = self._read_network_sample(
+                config=config,
+                capability_ids=supported,
+                network_cache=network_cache,
+            )
+            payload.update(network_sample.payload)
+            errors.update(network_sample.errors)
 
         if any(capability_id.startswith("battery") for capability_id in supported):
             payload.update(self._battery_payload(supported=supported, errors=errors))
@@ -177,14 +176,59 @@ class LinuxProvider:
             errors=errors,
         )
 
+    def _read_network_sample(
+        self,
+        *,
+        config: AppConfig,
+        capability_ids: tuple[str, ...],
+        network_cache: NetworkSnapshotCache | None,
+    ) -> LinuxNetworkSample:
+        reader = _LinuxNetworkReader(provider=self, capability_ids=capability_ids)
+        if network_cache is None:
+            return reader.read(config)
+        return network_cache.read(reader, config)
+
+    def _network_sample(
+        self,
+        *,
+        config: AppConfig,
+        capability_ids: tuple[str, ...],
+    ) -> LinuxNetworkSample:
+        payload: dict[str, object] = {}
+        errors: dict[str, str] = {}
+        wifi = (
+            self._read_wifi_status()
+            if any(
+                _is_network_capability(capability_id) or capability_id.startswith("wifi_")
+                for capability_id in capability_ids
+            )
+            else None
+        )
+        if any(_is_network_capability(capability_id) for capability_id in capability_ids):
+            payload.update(self._network_payload(config=config, errors=errors, wifi=wifi))
+        if any(capability_id.startswith("wifi_") for capability_id in capability_ids):
+            payload.update(self._wifi_payload(errors=errors, wifi=wifi))
+        if any(capability_id.startswith("ping_") for capability_id in capability_ids):
+            for target in config.ping_targets:
+                capability_id = f"ping_{target.id}"
+                if capability_id not in capability_ids:
+                    continue
+                latency_ms = self._ping(target, config.ping_timeout_seconds)
+                payload[f"ping_{target.id}_ms"] = _round_optional(latency_ms, 3)
+                if latency_ms is None:
+                    errors[capability_id] = f"ping {target.host} unavailable"
+        return LinuxNetworkSample(payload=payload, errors=errors)
+
     def _network_payload(
         self,
         *,
         config: AppConfig,
         errors: dict[str, str],
+        wifi: LinuxWifiStatus | None,
     ) -> dict[str, object]:
         interfaces = self._interfaces()
         gateways = self._default_gateways()
+        ipv4_available = False
         if interfaces is None:
             for capability_id in (
                 "ipv4_addresses",
@@ -196,6 +240,7 @@ class LinuxProvider:
             active_ethernet: tuple[LinuxInterface, ...] = ()
             ipv4_addresses: tuple[str, ...] = ()
         else:
+            ipv4_available = any(interface.ipv4_addresses is not None for interface in interfaces)
             active_ethernet = tuple(
                 interface
                 for interface in interfaces
@@ -204,16 +249,20 @@ class LinuxProvider:
             )
             ipv4_addresses = tuple(
                 dict.fromkeys(
-                    address for interface in interfaces for address in interface.ipv4_addresses
+                    address
+                    for interface in interfaces
+                    for address in (interface.ipv4_addresses or ())
                 )
             )
+            if not ipv4_available:
+                errors["ipv4_addresses"] = "IPv4 addresses unavailable"
 
         if gateways is None:
             for capability_id in ("default_gateways", "default_gateway_interfaces", "gateway_macs"):
                 errors[capability_id] = "default gateway unavailable"
             gateways = ()
 
-        wifi = self._read_wifi_status()
+        wifi = wifi or LinuxWifiStatus(interface=None, ssid=None, signal_dbm=None, bssid=None)
         home_network_present = _linux_home_network_present(
             config=config,
             wifi=wifi,
@@ -222,10 +271,12 @@ class LinuxProvider:
                 address
                 for interface in interfaces or ()
                 if interface.name == wifi.interface
-                for address in interface.ipv4_addresses
+                for address in (interface.ipv4_addresses or ())
             ),
             default_gateways=gateways,
         )
+        if config.home_ipv4_cidrs and not ipv4_available and not home_network_present:
+            errors["home_network_present"] = "IPv4 addresses unavailable"
         return {
             "ipv4_addresses": ", ".join(ipv4_addresses),
             "default_gateways": ", ".join(gateway.address for gateway in gateways),
@@ -242,8 +293,13 @@ class LinuxProvider:
             "home_network_present": home_network_present,
         }
 
-    def _wifi_payload(self, *, errors: dict[str, str]) -> dict[str, object]:
-        wifi = self._read_wifi_status()
+    def _wifi_payload(
+        self,
+        *,
+        errors: dict[str, str],
+        wifi: LinuxWifiStatus | None = None,
+    ) -> dict[str, object]:
+        wifi = wifi or self._read_wifi_status()
         payload: dict[str, object] = {
             "wifi_interface": wifi.interface,
             "wifi_ssid": wifi.ssid,
@@ -367,7 +423,7 @@ class LinuxProvider:
                 LinuxInterface(
                     name=name,
                     operstate=self._read_text(f"sys/class/net/{name}/operstate"),
-                    ipv4_addresses=(),
+                    ipv4_addresses=None,
                 )
             )
         return tuple(interfaces)
@@ -790,6 +846,26 @@ class LinuxProvider:
             return None
 
 
+@dataclass(frozen=True)
+class _LinuxNetworkReader:
+    provider: LinuxProvider
+    capability_ids: tuple[str, ...]
+
+    def read(self, config: AppConfig) -> LinuxNetworkSample:
+        return self.provider._network_sample(
+            config=config,
+            capability_ids=self.capability_ids,
+        )
+
+
+def _is_linux_network_sample_capability(capability_id: str) -> bool:
+    return (
+        _is_network_capability(capability_id)
+        or capability_id.startswith("wifi_")
+        or capability_id.startswith("ping_")
+    )
+
+
 def _is_network_capability(capability_id: str) -> bool:
     return capability_id in {
         "ipv4_addresses",
@@ -827,7 +903,7 @@ def _linux_home_network_present(
         return True
 
     addresses = tuple(
-        address for interface in ethernet for address in interface.ipv4_addresses
+        address for interface in ethernet for address in (interface.ipv4_addresses or ())
     ) + tuple(wifi_ipv4_addresses)
     return any(
         _ip_in_cidr(address, cidr) for address in addresses for cidr in config.home_ipv4_cidrs

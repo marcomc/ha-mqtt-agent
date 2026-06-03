@@ -12,7 +12,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from ipaddress import ip_address, ip_network
 from pathlib import Path
-from typing import Any, SupportsFloat, SupportsIndex
+from typing import Any, Protocol, SupportsFloat, SupportsIndex, TypeVar, cast
 
 from .config import AppConfig, PingTarget
 
@@ -36,6 +36,12 @@ class CommandResult:
 
 
 CommandRunner = Callable[[Sequence[str], float], CommandResult | None]
+NetworkSampleT = TypeVar("NetworkSampleT")
+NetworkSampleT_co = TypeVar("NetworkSampleT_co", covariant=True)
+
+
+class CachedNetworkReader(Protocol[NetworkSampleT_co]):
+    def read(self, config: AppConfig) -> NetworkSampleT_co: ...
 
 
 @dataclass(frozen=True)
@@ -182,9 +188,13 @@ class NetworkSnapshotCache:
 
     def __init__(self) -> None:
         self._last_refresh_monotonic: float | None = None
-        self._sample: NetworkSample | None = None
+        self._sample: object | None = None
 
-    def read(self, reader: "NetworkSensorReader", config: AppConfig) -> NetworkSample:
+    def read(
+        self,
+        reader: CachedNetworkReader[NetworkSampleT],
+        config: AppConfig,
+    ) -> NetworkSampleT:
         now = time.monotonic()
         if (
             self._sample is None
@@ -193,7 +203,7 @@ class NetworkSnapshotCache:
         ):
             self._sample = reader.read(config)
             self._last_refresh_monotonic = now
-        return self._sample
+        return cast(NetworkSampleT, self._sample)
 
 
 class NetworkSensorReader:
