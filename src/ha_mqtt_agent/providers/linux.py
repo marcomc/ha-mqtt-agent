@@ -725,15 +725,6 @@ class LinuxProvider:
         return tuple(capabilities)
 
     def _upower_battery_fields(self) -> dict[str, str] | None:
-        device = self._upower_battery_device()
-        if device is None:
-            return None
-        result = self._run([UPOWER_COMMAND, "-i", device], LINUX_COMMAND_TIMEOUT_SECONDS)
-        if result is None or result.returncode != 0:
-            return None
-        return _parse_upower_fields(result.stdout)
-
-    def _upower_battery_device(self) -> str | None:
         if not self._command_available(UPOWER_COMMAND):
             return None
         result = self._run([UPOWER_COMMAND, "-e"], LINUX_COMMAND_TIMEOUT_SECONDS)
@@ -741,9 +732,18 @@ class LinuxProvider:
             return None
         for raw_line in result.stdout.splitlines():
             device = raw_line.strip()
-            if "battery" in device.casefold():
-                return device
+            if "battery" not in device.casefold():
+                continue
+            fields = self._upower_device_fields(device)
+            if fields is not None and _upower_is_system_battery(fields):
+                return fields
         return None
+
+    def _upower_device_fields(self, device: str) -> dict[str, str] | None:
+        result = self._run([UPOWER_COMMAND, "-i", device], LINUX_COMMAND_TIMEOUT_SECONDS)
+        if result is None or result.returncode != 0:
+            return None
+        return _parse_upower_fields(result.stdout)
 
     def _battery_path(self) -> Path | None:
         power_path = self._path("sys/class/power_supply")
@@ -1026,6 +1026,24 @@ def _parse_upower_fields(output: str) -> dict[str, str]:
         if normalized_key:
             fields[normalized_key] = value.strip()
     return fields
+
+
+def _upower_is_system_battery(fields: dict[str, str]) -> bool:
+    return (
+        fields.get("type", "").casefold() == "battery"
+        and _upower_bool(fields.get("power supply")) is True
+    )
+
+
+def _upower_bool(value: str | None) -> bool | None:
+    if value is None:
+        return None
+    normalized = value.strip().casefold()
+    if normalized in {"yes", "true", "1"}:
+        return True
+    if normalized in {"no", "false", "0"}:
+        return False
+    return None
 
 
 def _upower_percent(value: str | None) -> float | None:

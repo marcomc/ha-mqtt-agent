@@ -311,6 +311,8 @@ def test_linux_provider_reads_battery_from_upower_when_sysfs_is_absent(
             (UPOWER_COMMAND, "-i", battery_device): LinuxCommandResult(
                 stdout=(
                     "  native-path:          BAT0\n"
+                    "  type:                 battery\n"
+                    "  power supply:         yes\n"
                     "  state:                discharging\n"
                     "  percentage:           87%\n"
                     "  capacity:             84%\n"
@@ -342,6 +344,42 @@ def test_linux_provider_reads_battery_from_upower_when_sysfs_is_absent(
     assert availability["battery"] == "online"
     assert availability["battery_max_capacity"] == "online"
     assert "battery_max_capacity_mah" not in availability
+
+
+def test_linux_provider_ignores_upower_peripheral_batteries(
+    tmp_path: Path,
+) -> None:
+    mouse_device = "/org/freedesktop/UPower/devices/battery_hidpp_battery_0"
+    runner = FakeLinuxRunner(
+        {
+            (UPOWER_COMMAND, "-e"): LinuxCommandResult(
+                stdout=f"{mouse_device}\n",
+                returncode=0,
+            ),
+            (UPOWER_COMMAND, "-i", mouse_device): LinuxCommandResult(
+                stdout=(
+                    "  native-path:          hidpp_battery_0\n"
+                    "  type:                 battery\n"
+                    "  power supply:         no\n"
+                    "  state:                discharging\n"
+                    "  percentage:           55%\n"
+                ),
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({UPOWER_COMMAND}),
+    )
+
+    payload = provider.sample(AppConfig(ping_targets=()), update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert "battery" not in provider.supported_capability_ids(AppConfig(ping_targets=()))
+    assert "battery_percent" not in payload
+    assert "battery" not in availability
 
 
 def test_linux_provider_uses_nmcli_for_wifi_on_networkmanager_hosts(
