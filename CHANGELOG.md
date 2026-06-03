@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-06-03
+
+### Added in 0.2.0
+
+- Added a shared capability registry and normalized capability snapshots as the
+  first step toward platform-specific macOS and Linux providers.
+- Added a macOS provider wrapper around the existing AppleSmartBattery, energy,
+  network, Wi-Fi, ping, and location telemetry paths.
+- Added cross-platform architecture documentation for the planned `0.2.0`
+  provider model, installer behavior, MQTT discovery migration, and tests.
+
+### Changed in 0.2.0
+
+- MQTT discovery is now generated from capability definitions instead of a
+  hardcoded sensor list.
+- MQTT discovery and state availability are now limited to capabilities that
+  the active provider supports.
+- MQTT state payloads now include per-entity availability, and discovery
+  entities subscribe to both device availability and their own capability
+  availability.
+
 ## [0.1.3] - 2026-05-22
 
 ### Fixed in 0.1.3

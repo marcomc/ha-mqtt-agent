@@ -9,8 +9,16 @@ from unittest.mock import Mock, call
 import pytest
 
 from ha_mqtt_agent import __version__, cli
+from ha_mqtt_agent.capabilities import CapabilitySnapshot, capability_snapshot_from_payload
 from ha_mqtt_agent.config import AppConfig, load_config
-from ha_mqtt_agent.network import GeocodedLocation, LocationStatus, NetworkSample, WifiStatus
+from ha_mqtt_agent.network import (
+    GeocodedLocation,
+    LocationStatus,
+    NetworkSample,
+    NetworkSnapshotCache,
+    WifiStatus,
+)
+from ha_mqtt_agent.providers.base import PayloadPostprocessor
 from ha_mqtt_agent.sensors import SensorSample
 
 
@@ -639,6 +647,28 @@ def test_publish_once_sends_discovery_availability_and_state(
     assert "ha_mqtt_agent/host/location/attributes" in topics
 
 
+def test_publish_once_discovers_only_provider_supported_capabilities(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    publish_mock = Mock()
+    monkeypatch.setattr(cli, "publish_messages", publish_mock)
+    monkeypatch.setattr(cli, "_telemetry_provider", lambda: _UptimeOnlyProvider())
+
+    result = cli._handle_publish_once(config, skip_discovery=False)
+
+    assert result == 0
+    messages = list(publish_mock.call_args.args[1])
+    topics = [message.topic for message in messages]
+    state = json.loads(
+        next(message.payload for message in messages if message.topic.endswith("/state"))
+    )
+    assert "homeassistant/sensor/host_uptime/config" in topics
+    assert "homeassistant/sensor/host_power/config" not in topics
+    assert state["availability"] == {"uptime": "online"}
+
+
 def test_publish_once_skips_location_attributes_when_location_is_disabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -730,7 +760,7 @@ def test_run_keeps_running_after_publish_failure(
         _config: AppConfig,
         *,
         skip_discovery: bool,
-        network_cache: object | None = None,
+        network_cache: NetworkSnapshotCache | None = None,
         client_id_suffix: str = "",
     ) -> None:
         _ = (skip_discovery, network_cache, client_id_suffix)
@@ -783,3 +813,30 @@ def test_next_publish_delay_caps_without_large_integer_overflow() -> None:
     assert cli._next_publish_delay(config, 1) == 30.0
     assert cli._next_publish_delay(config, 2) == 60.0
     assert cli._next_publish_delay(config, 10_000) == 60.0
+
+
+class _UptimeOnlyProvider:
+    provider_id = "test"
+
+    def supported_capability_ids(self, config: AppConfig) -> tuple[str, ...]:
+        _ = config
+        return ("uptime",)
+
+    def sample(
+        self,
+        config: AppConfig,
+        *,
+        update_energy: bool = True,
+        network_cache: NetworkSnapshotCache | None = None,
+        payload_postprocessor: PayloadPostprocessor | None = None,
+    ) -> CapabilitySnapshot:
+        _ = (update_energy, network_cache)
+        payload: dict[str, object] = {"uptime_seconds": 123}
+        if payload_postprocessor is not None:
+            payload_postprocessor(payload)
+        return capability_snapshot_from_payload(
+            config=config,
+            payload=payload,
+            provider=self.provider_id,
+            capability_ids=self.supported_capability_ids(config),
+        )

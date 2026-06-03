@@ -30,7 +30,8 @@ At the start of every new AI agent chat for this repository, read:
 - Prefer focused modules instead of one large `cli.py`.
 - Keep `python -m ha_mqtt_agent` working.
 - Preserve the standalone install behavior of `make install`.
-- Preserve the user LaunchAgent behavior of `make install-agent`.
+- Preserve the user LaunchAgent behavior of `make install`, `restart-agent`,
+  `agent-status`, and `uninstall-agent`.
 
 ## Quality Gates
 
@@ -63,8 +64,17 @@ Expected checks:
 - When adding helper app modes, keep normal telemetry sampling on non-interactive
   read paths. Reserve prompts, permission requests, and app activation for
   explicit CLI commands, and test the helper argv for both paths.
+- When adding health, recovery, or readiness probes, preserve the runtime MQTT
+  client identity and prove protocol readiness (CONNACK), not only TCP connect.
+- For broker-unreachable recovery paths, cap retry backoff and keep lightweight
+  connectivity probes separate from expensive sampling so reconnect does not lag
+  behind Home Assistant freshness expiry.
 - When adding optional Home Assistant entities, gate discovery and auxiliary
   publish topics on the same config flag that gates the runtime telemetry.
+- When adding or changing providers, keep provider-supported capabilities
+  separate from current readings: unsupported capabilities must be omitted from
+  discovery and state availability, while supported-but-failing readings remain
+  discovered and report per-entity unavailable.
 
 ## Release Hygiene
 

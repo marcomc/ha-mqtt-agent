@@ -2,6 +2,9 @@
 
 ## User Guides
 
+- [Cross-Platform Architecture](cross-platform-architecture.md): planned
+  `0.2.0` capability model, Linux and macOS install behavior, MQTT discovery,
+  and legacy cleanup.
 - [Home Assistant Setup](home-assistant-setup.md): configure MQTT discovery,
   confirm the Mac device, and add its energy sensor to the Energy dashboard.
 - [Roadmap](roadmap.md): future command, security, provider, and release work
