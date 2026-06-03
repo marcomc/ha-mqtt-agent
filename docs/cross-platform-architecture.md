@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Purpose](#purpose)
+- [Implementation Status](#implementation-status)
 - [Goals](#goals)
 - [Supported Platforms](#supported-platforms)
 - [Detection Model](#detection-model)
@@ -21,7 +22,26 @@
 
 `ha-mqtt-agent` should install and run on macOS and normal Linux hosts, including Raspberry Pi OS. It should detect the platform, service manager, tools, permissions, and readable sensors on the machine where it is running, then publish only real values that can actually be collected from that machine.
 
-This document is the implementation target for the breaking `0.2.0` cross-platform rewrite.
+This document is the implementation target for the cross-platform rewrite. The
+`0.2.0` release implements the first stage only.
+
+## Implementation Status
+
+Implemented in `0.2.0`:
+
+- Shared capability registry and normalized capability snapshots.
+- macOS provider wrapper around the existing telemetry readers.
+- MQTT discovery generated from capability definitions.
+- Provider-supported capability filtering for discovery and state payloads.
+- Per-entity availability in MQTT state.
+
+Not implemented yet:
+
+- Linux and Raspberry Pi runtime provider.
+- Linux `systemd` installer.
+- `doctor` command.
+- `publish-once --dry-run`.
+- Explicit legacy MQTT discovery cleanup command.
 
 ## Goals
 
@@ -37,7 +57,7 @@ This document is the implementation target for the breaking `0.2.0` cross-platfo
 
 ## Supported Platforms
 
-The first cross-platform release targets:
+The completed cross-platform release should target:
 
 - macOS with the existing per-user LaunchAgent model.
 - Raspberry Pi OS and Debian-style Linux systems.

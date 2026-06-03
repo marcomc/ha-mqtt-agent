@@ -12,8 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   first step toward platform-specific macOS and Linux providers.
 - Added a macOS provider wrapper around the existing AppleSmartBattery, energy,
   network, Wi-Fi, ping, and location telemetry paths.
-- Added cross-platform architecture documentation for the planned `0.2.0`
-  provider model, installer behavior, MQTT discovery migration, and tests.
+- Added cross-platform architecture documentation for the provider model,
+  current implementation status, installer behavior, MQTT discovery migration,
+  and tests.
+- Added README guidance clarifying that Linux and Raspberry Pi hosts are
+  packaging-smoke-test only until the Linux provider and installer land.
 
 ### Changed in 0.2.0
 

@@ -6,6 +6,7 @@
 - [Runtime Flow](#runtime-flow)
 - [Features](#features)
 - [Requirements](#requirements)
+- [Linux and Raspberry Pi Status](#linux-and-raspberry-pi-status)
 - [Quick Install](#quick-install)
 - [Install Modes](#install-modes)
 - [Installation](#installation)
@@ -100,6 +101,29 @@ For maintainers:
 - `markdownlint`
 - `shellcheck`
 - Xcode Command Line Tools with `swiftc`
+
+## Linux and Raspberry Pi Status
+
+`0.2.0` adds the shared capability model, macOS provider wrapper, and
+capability-based MQTT discovery/state handling. It does not yet include a Linux
+runtime provider, Raspberry Pi sensor support, or a `systemd` installer.
+
+On Linux or Raspberry Pi OS, use a source checkout only for packaging smoke
+tests:
+
+```bash
+git clone <repo-url>
+cd ha-mqtt-agent
+python3 -m venv .venv
+. .venv/bin/activate
+pip install --upgrade pip
+pip install .
+ha-mqtt-agent --version
+ha-mqtt-agent info
+```
+
+Do not install it as a real service or run telemetry publishing commands on
+Linux until the Linux provider and installer work lands.
 
 ## Quick Install
 
