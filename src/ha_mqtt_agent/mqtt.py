@@ -13,6 +13,7 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
 
 from . import __version__
+from .capabilities import CapabilityDefinition, sensor_registry
 from .config import AppConfig
 
 MQTT_PROBE_CONNACK_TIMEOUT_SECONDS = 5.0
@@ -26,292 +27,15 @@ class MqttMessage:
 
 
 def discovery_messages(config: AppConfig) -> list[MqttMessage]:
-    always_sensors = [
-        {
-            "object": "power",
-            "name": "Power",
-            "unique": "power",
-            "device_class": "power",
-            "state_class": "measurement",
-            "unit": "W",
-            "template": "{{ value_json.power_w }}",
-        },
-        {
-            "object": "energy",
-            "name": "Energy",
-            "unique": "energy",
-            "device_class": "energy",
-            "state_class": "total_increasing",
-            "unit": "kWh",
-            "template": "{{ value_json.energy_kwh }}",
-        },
-        {
-            "object": "battery",
-            "name": "Battery",
-            "unique": "battery",
-            "device_class": "battery",
-            "state_class": "measurement",
-            "unit": "%",
-            "template": "{{ value_json.battery_percent }}",
-        },
-        {
-            "object": "battery_max_capacity",
-            "name": "Battery maximum capacity",
-            "unique": "battery_max_capacity",
-            "device_class": "battery",
-            "state_class": "measurement",
-            "unit": "%",
-            "template": "{{ value_json.battery_max_capacity_percent }}",
-        },
-        {
-            "object": "battery_max_capacity_mah",
-            "name": "Battery maximum capacity mAh",
-            "unique": "battery_max_capacity_mah",
-            "state_class": "measurement",
-            "unit": "mAh",
-            "template": "{{ value_json.battery_max_capacity_mah }}",
-        },
-        {
-            "object": "battery_design_capacity",
-            "name": "Battery design capacity",
-            "unique": "battery_design_capacity",
-            "state_class": "measurement",
-            "unit": "mAh",
-            "template": "{{ value_json.battery_design_capacity_mah }}",
-        },
-        {
-            "object": "battery_temperature",
-            "name": "Battery temperature",
-            "unique": "battery_temperature",
-            "device_class": "temperature",
-            "state_class": "measurement",
-            "unit": "°C",
-            "template": "{{ value_json.battery_temperature_c }}",
-        },
-        {
-            "object": "battery_virtual_temperature",
-            "name": "Battery virtual temperature",
-            "unique": "battery_virtual_temperature",
-            "device_class": "temperature",
-            "state_class": "measurement",
-            "unit": "°C",
-            "template": "{{ value_json.battery_virtual_temperature_c }}",
-        },
-        {
-            "object": "battery_cycle_count",
-            "name": "Battery cycle count",
-            "unique": "battery_cycle_count",
-            "state_class": "total_increasing",
-            "template": "{{ value_json.battery_cycle_count }}",
-        },
-        {
-            "object": "battery_status",
-            "name": "Battery status",
-            "unique": "battery_status",
-            "template": "{{ value_json.battery_status }}",
-        },
-        {
-            "object": "uptime",
-            "name": "Uptime",
-            "unique": "uptime",
-            "device_class": "duration",
-            "state_class": "measurement",
-            "unit": "s",
-            "template": "{{ value_json.uptime_seconds }}",
-        },
-        {
-            "object": "wifi_ssid",
-            "name": "Wi-Fi SSID",
-            "unique": "wifi_ssid",
-            "template": "{{ value_json.wifi_ssid }}",
-        },
-        {
-            "object": "wifi_bssid",
-            "name": "Wi-Fi BSSID",
-            "unique": "wifi_bssid",
-            "template": (
-                "{{ value_json.wifi_bssid if value_json.wifi_bssid is not none "
-                "else 'not_available' }}"
-            ),
-        },
-        {
-            "object": "wifi_signal_dbm",
-            "name": "Wi-Fi signal",
-            "unique": "wifi_signal_dbm",
-            "device_class": "signal_strength",
-            "state_class": "measurement",
-            "unit": "dBm",
-            "template": "{{ value_json.wifi_signal_dbm }}",
-        },
-        {
-            "object": "wifi_signal_percent",
-            "name": "Wi-Fi signal percent",
-            "unique": "wifi_signal_percent",
-            "state_class": "measurement",
-            "unit": "%",
-            "template": "{{ value_json.wifi_signal_percent }}",
-        },
-        {
-            "object": "ipv4_addresses",
-            "name": "IPv4 addresses",
-            "unique": "ipv4_addresses",
-            "template": "{{ value_json.ipv4_addresses }}",
-        },
-        {
-            "object": "default_gateways",
-            "name": "Default gateways",
-            "unique": "default_gateways",
-            "template": "{{ value_json.default_gateways }}",
-        },
-        {
-            "object": "default_gateway_interfaces",
-            "name": "Default gateway interfaces",
-            "unique": "default_gateway_interfaces",
-            "template": "{{ value_json.default_gateway_interfaces }}",
-        },
-        {
-            "object": "gateway_macs",
-            "name": "Gateway MACs",
-            "unique": "gateway_macs",
-            "template": "{{ value_json.gateway_macs }}",
-        },
-        {
-            "object": "ethernet_active_count",
-            "name": "Ethernet active count",
-            "unique": "ethernet_active_count",
-            "state_class": "measurement",
-            "template": "{{ value_json.ethernet_active_count }}",
-        },
-        {
-            "object": "ethernet_active_interfaces",
-            "name": "Ethernet active interfaces",
-            "unique": "ethernet_active_interfaces",
-            "template": "{{ value_json.ethernet_active_interfaces }}",
-        },
-    ]
-    sensors = list(always_sensors)
-    if config.publish_location:
-        sensors.extend(_location_sensor_specs())
-    sensors.extend(_ping_sensor_specs(config))
-    binary_sensors = [
-        {
-            "object": "home_network_present",
-            "name": "Home network present",
-            "unique": "home_network_present",
-            "device_class": "presence",
-            "template": "{{ value_json.home_network_present | tojson }}",
-        },
-    ]
-    if config.publish_location:
-        binary_sensors.extend(_location_binary_sensor_specs())
-    messages = [
-        *[_sensor_discovery_message(config, sensor) for sensor in sensors],
-        *[_binary_sensor_discovery_message(config, sensor) for sensor in binary_sensors],
-    ]
-    if config.publish_location:
-        messages.append(_device_tracker_discovery_message(config))
+    messages: list[MqttMessage] = []
+    for definition in sensor_registry(config):
+        if definition.component == "sensor":
+            messages.append(_sensor_discovery_message(config, definition))
+        elif definition.component == "binary_sensor":
+            messages.append(_binary_sensor_discovery_message(config, definition))
+        elif definition.component == "device_tracker":
+            messages.append(_device_tracker_discovery_message(config, definition))
     return messages
-
-
-def _location_sensor_specs() -> list[dict[str, str]]:
-    return [
-        {
-            "object": "latitude",
-            "name": "Latitude",
-            "unique": "latitude",
-            "state_class": "measurement",
-            "unit": "°",
-            "template": "{{ value_json.latitude }}",
-        },
-        {
-            "object": "longitude",
-            "name": "Longitude",
-            "unique": "longitude",
-            "state_class": "measurement",
-            "unit": "°",
-            "template": "{{ value_json.longitude }}",
-        },
-        {
-            "object": "location_accuracy",
-            "name": "Location accuracy",
-            "unique": "location_accuracy",
-            "device_class": "distance",
-            "state_class": "measurement",
-            "unit": "m",
-            "template": "{{ value_json.location_accuracy_m }}",
-        },
-        {
-            "object": "location_last_seen",
-            "name": "Location last seen",
-            "unique": "location_last_seen",
-            "device_class": "timestamp",
-            "template": "{{ value_json.location_last_seen }}",
-        },
-        {
-            "object": "location_error",
-            "name": "Location error",
-            "unique": "location_error",
-            "template": (
-                "{{ value_json.location_error if value_json.location_error is not none "
-                "else 'none' }}"
-            ),
-        },
-        {
-            "object": "geocoded_location",
-            "name": "Geocoded location",
-            "unique": "geocoded_location",
-            "template": "{{ value_json.geocoded_location }}",
-            "attributes_template": (
-                "{{ {"
-                "'Location': [value_json.latitude, value_json.longitude], "
-                "'Name': value_json.geocoded_location_name, "
-                "'Country': value_json.geocoded_location_country, "
-                "'ISOCountryCode': value_json.geocoded_location_iso_country_code, "
-                "'TimeZone': value_json.geocoded_location_time_zone, "
-                "'AdministrativeArea': value_json.geocoded_location_administrative_area, "
-                "'SubAdministrativeArea': "
-                "value_json.geocoded_location_sub_administrative_area, "
-                "'PostalCode': value_json.geocoded_location_postal_code, "
-                "'Locality': value_json.geocoded_location_locality, "
-                "'SubLocality': value_json.geocoded_location_sub_locality, "
-                "'Thoroughfare': value_json.geocoded_location_thoroughfare, "
-                "'SubThoroughfare': value_json.geocoded_location_sub_thoroughfare, "
-                "'AreasOfInterest': value_json.geocoded_location_areas_of_interest, "
-                "'Ocean': value_json.geocoded_location_ocean, "
-                "'InlandWater': value_json.geocoded_location_inland_water, "
-                "'Error': value_json.geocoded_location_error, "
-                "'Cached': value_json.geocoded_location_cached, "
-                "'LastSeen': value_json.location_last_seen"
-                "} | tojson }}"
-            ),
-        },
-        {
-            "object": "geocoded_location_error",
-            "name": "Geocoded location error",
-            "unique": "geocoded_location_error",
-            "template": (
-                "{{ value_json.geocoded_location_error if "
-                "value_json.geocoded_location_error is not none else 'none' }}"
-            ),
-        },
-    ]
-
-
-def _location_binary_sensor_specs() -> list[dict[str, str]]:
-    return [
-        {
-            "object": "location_cached",
-            "name": "Location cached",
-            "unique": "location_cached",
-            "template": "{{ value_json.location_cached | tojson }}",
-        },
-        {
-            "object": "geocoded_location_cached",
-            "name": "Geocoded location cached",
-            "unique": "geocoded_location_cached",
-            "template": "{{ value_json.geocoded_location_cached | tojson }}",
-        },
-    ]
 
 
 def state_message(config: AppConfig, payload: dict[str, object]) -> MqttMessage:
@@ -445,17 +169,17 @@ def _raise_for_mqtt_connack(reason_code: object) -> None:
     raise RuntimeError(f"MQTT CONNACK failed: {reason_code}")
 
 
-def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMessage:
-    unique_id = f"{config.device_id}_{spec['unique']}"
+def _sensor_discovery_message(config: AppConfig, definition: CapabilityDefinition) -> MqttMessage:
+    unique_id = f"{config.device_id}_{definition.id}"
     payload: dict[str, Any] = {
-        "name": spec["name"],
+        "name": definition.name,
         "unique_id": unique_id,
         "object_id": unique_id,
         "state_topic": config.state_topic,
         "availability_topic": config.availability_topic,
         "payload_available": "online",
         "payload_not_available": "offline",
-        "value_template": spec["template"],
+        "value_template": definition.value_template,
         "expire_after": _expire_after_seconds(config),
         "device": _device_payload(config),
         "origin": {
@@ -464,24 +188,29 @@ def _sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMe
             "url": "https://github.com/marcomc/ha-mqtt-agent",
         },
     }
-    if "device_class" in spec:
-        payload["device_class"] = spec["device_class"]
-    if "state_class" in spec:
-        payload["state_class"] = spec["state_class"]
-    if "unit" in spec:
-        payload["unit_of_measurement"] = spec["unit"]
-    if "attributes_template" in spec:
+    if definition.device_class is not None:
+        payload["device_class"] = definition.device_class
+    if definition.state_class is not None:
+        payload["state_class"] = definition.state_class
+    if definition.unit is not None:
+        payload["unit_of_measurement"] = definition.unit
+    if definition.entity_category is not None:
+        payload["entity_category"] = definition.entity_category
+    if definition.attributes_template is not None:
         payload["json_attributes_topic"] = config.state_topic
-        payload["json_attributes_template"] = spec["attributes_template"]
+        payload["json_attributes_template"] = definition.attributes_template
 
     topic = f"{config.discovery_prefix}/sensor/{unique_id}/config"
     return MqttMessage(topic=topic, payload=json.dumps(payload, sort_keys=True), retain=True)
 
 
-def _device_tracker_discovery_message(config: AppConfig) -> MqttMessage:
-    unique_id = f"{config.device_id}_location"
+def _device_tracker_discovery_message(
+    config: AppConfig,
+    definition: CapabilityDefinition,
+) -> MqttMessage:
+    unique_id = f"{config.device_id}_{definition.id}"
     payload: dict[str, Any] = {
-        "name": "Location",
+        "name": definition.name,
         "unique_id": unique_id,
         "object_id": unique_id,
         "source_type": "gps",
@@ -500,17 +229,20 @@ def _device_tracker_discovery_message(config: AppConfig) -> MqttMessage:
     return MqttMessage(topic=topic, payload=json.dumps(payload, sort_keys=True), retain=True)
 
 
-def _binary_sensor_discovery_message(config: AppConfig, spec: dict[str, str]) -> MqttMessage:
-    unique_id = f"{config.device_id}_{spec['unique']}"
+def _binary_sensor_discovery_message(
+    config: AppConfig,
+    definition: CapabilityDefinition,
+) -> MqttMessage:
+    unique_id = f"{config.device_id}_{definition.id}"
     payload: dict[str, Any] = {
-        "name": spec["name"],
+        "name": definition.name,
         "unique_id": unique_id,
         "object_id": unique_id,
         "state_topic": config.state_topic,
         "availability_topic": config.availability_topic,
         "payload_available": "online",
         "payload_not_available": "offline",
-        "value_template": spec["template"],
+        "value_template": definition.value_template,
         "payload_on": "true",
         "payload_off": "false",
         "expire_after": _expire_after_seconds(config),
@@ -521,26 +253,13 @@ def _binary_sensor_discovery_message(config: AppConfig, spec: dict[str, str]) ->
             "url": "https://github.com/marcomc/ha-mqtt-agent",
         },
     }
-    if "device_class" in spec:
-        payload["device_class"] = spec["device_class"]
+    if definition.device_class is not None:
+        payload["device_class"] = definition.device_class
+    if definition.entity_category is not None:
+        payload["entity_category"] = definition.entity_category
 
     topic = f"{config.discovery_prefix}/binary_sensor/{unique_id}/config"
     return MqttMessage(topic=topic, payload=json.dumps(payload, sort_keys=True), retain=True)
-
-
-def _ping_sensor_specs(config: AppConfig) -> list[dict[str, str]]:
-    return [
-        {
-            "object": f"ping_{target.id}",
-            "name": f"Ping {target.name}",
-            "unique": f"ping_{target.id}",
-            "device_class": "duration",
-            "state_class": "measurement",
-            "unit": "ms",
-            "template": f"{{{{ value_json.ping_{target.id}_ms }}}}",
-        }
-        for target in config.ping_targets
-    ]
 
 
 def _device_payload(config: AppConfig) -> dict[str, object]:

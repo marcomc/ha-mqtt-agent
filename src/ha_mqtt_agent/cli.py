@@ -15,7 +15,6 @@ from typing import SupportsFloat, SupportsIndex
 
 from . import __version__
 from .config import DEFAULT_CONFIG_PATH, AppConfig, load_config
-from .energy import EnergyAccumulator
 from .mqtt import (
     MqttMessage,
     availability_message,
@@ -26,6 +25,7 @@ from .mqtt import (
     state_message,
 )
 from .network import NetworkSensorReader, NetworkSnapshotCache
+from .providers.macos import MacOSProvider
 from .sensors import IoregSensorReader
 
 OPEN_PATH = "/usr/bin/open"
@@ -332,23 +332,25 @@ def _sample_payload(
     update_energy: bool = True,
     network_cache: NetworkSnapshotCache | None = None,
 ) -> dict[str, object]:
-    sample = IoregSensorReader().read()
-    accumulator = EnergyAccumulator(
-        config.state_path,
-        max_gap_seconds=config.max_energy_gap_seconds,
+    provider = MacOSProvider(
+        sensor_reader=IoregSensorReader(),
+        network_reader=NetworkSensorReader(),
     )
-    if update_energy:
-        energy_kwh = accumulator.update(timestamp=sample.timestamp, power_w=sample.power_w)
-    else:
-        energy_kwh = accumulator.energy_kwh
-    payload = sample.payload(energy_kwh=energy_kwh)
-    network_reader = NetworkSensorReader()
-    if network_cache is None:
-        payload.update(network_reader.read(config).payload())
-    else:
-        payload.update(network_cache.read(network_reader, config).payload())
-    _apply_location_cache(payload, config, enabled=config.publish_location, persist=update_energy)
-    return payload
+
+    def apply_location_cache(payload: dict[str, object]) -> None:
+        _apply_location_cache(
+            payload,
+            config,
+            enabled=config.publish_location,
+            persist=update_energy,
+        )
+
+    return provider.sample(
+        config,
+        update_energy=update_energy,
+        network_cache=network_cache,
+        payload_postprocessor=apply_location_cache,
+    ).state_payload()
 
 
 def _apply_location_cache(
