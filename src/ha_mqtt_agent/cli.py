@@ -25,6 +25,7 @@ from .mqtt import (
     state_message,
 )
 from .network import NetworkSensorReader, NetworkSnapshotCache
+from .providers.base import TelemetryProvider
 from .providers.macos import MacOSProvider
 from .sensors import IoregSensorReader
 
@@ -331,11 +332,9 @@ def _sample_payload(
     *,
     update_energy: bool = True,
     network_cache: NetworkSnapshotCache | None = None,
+    provider: TelemetryProvider | None = None,
 ) -> dict[str, object]:
-    provider = MacOSProvider(
-        sensor_reader=IoregSensorReader(),
-        network_reader=NetworkSensorReader(),
-    )
+    provider = provider or _telemetry_provider()
 
     def apply_location_cache(payload: dict[str, object]) -> None:
         _apply_location_cache(
@@ -351,6 +350,13 @@ def _sample_payload(
         network_cache=network_cache,
         payload_postprocessor=apply_location_cache,
     ).state_payload()
+
+
+def _telemetry_provider() -> TelemetryProvider:
+    return MacOSProvider(
+        sensor_reader=IoregSensorReader(),
+        network_reader=NetworkSensorReader(),
+    )
 
 
 def _apply_location_cache(
@@ -685,11 +691,16 @@ def _publish_once(
     network_cache: NetworkSnapshotCache | None = None,
     client_id_suffix: str = "",
 ) -> None:
+    provider = _telemetry_provider()
+
     def messages() -> Iterable[MqttMessage]:
         if not skip_discovery:
-            yield from discovery_messages(config)
+            yield from discovery_messages(
+                config,
+                capability_ids=provider.supported_capability_ids(config),
+            )
         yield availability_message(config, "online")
-        payload = _sample_payload(config, network_cache=network_cache)
+        payload = _sample_payload(config, network_cache=network_cache, provider=provider)
         yield state_message(config, payload)
         if config.publish_location:
             location_message = location_attributes_message(config, payload)

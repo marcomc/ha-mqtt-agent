@@ -33,6 +33,15 @@ def test_discovery_messages_define_home_assistant_energy_sensor() -> None:
     assert payload["state_class"] == "total_increasing"
     assert payload["unit_of_measurement"] == "kWh"
     assert payload["state_topic"] == "ha_mqtt_agent/workstation/state"
+    assert payload["availability_mode"] == "all"
+    assert payload["availability"] == [
+        {"topic": "ha_mqtt_agent/workstation/availability"},
+        {
+            "topic": "ha_mqtt_agent/workstation/state",
+            "value_template": "{{ value_json.availability.energy }}",
+        },
+    ]
+    assert "availability_topic" not in payload
 
 
 def test_discovery_messages_define_temperature_and_uptime_sensors() -> None:
@@ -80,6 +89,9 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert home_network["payload_on"] == "true"
     assert home_network["payload_off"] == "false"
     assert home_network["value_template"] == "{{ value_json.home_network_present | tojson }}"
+    assert home_network["availability"][1]["value_template"] == (
+        "{{ value_json.availability.home_network_present }}"
+    )
 
     ethernet = messages["homeassistant/sensor/workstation_ethernet_active_interfaces/config"]
     assert ethernet["value_template"] == "{{ value_json.ethernet_active_interfaces }}"
@@ -98,6 +110,20 @@ def test_discovery_messages_skip_location_entities_when_location_is_disabled() -
     assert "homeassistant/sensor/workstation_geocoded_location/config" not in topics
     assert "homeassistant/binary_sensor/workstation_location_cached/config" not in topics
     assert "homeassistant/device_tracker/workstation_location/config" not in topics
+
+
+def test_discovery_messages_are_limited_to_supported_capabilities() -> None:
+    config = AppConfig(device_id="workstation", publish_location=True)
+
+    topics = {
+        message.topic
+        for message in discovery_messages(config, capability_ids=("uptime", "location"))
+    }
+
+    assert topics == {
+        "homeassistant/sensor/workstation_uptime/config",
+        "homeassistant/device_tracker/workstation_location/config",
+    }
 
 
 def test_discovery_messages_define_location_entities_when_location_is_enabled() -> None:
@@ -154,7 +180,13 @@ def test_discovery_messages_define_location_entities_when_location_is_enabled() 
     assert location_tracker["json_attributes_topic"] == (
         "ha_mqtt_agent/workstation/location/attributes"
     )
-    assert location_tracker["availability_topic"] == "ha_mqtt_agent/workstation/availability"
+    assert location_tracker["availability"] == [
+        {"topic": "ha_mqtt_agent/workstation/availability"},
+        {
+            "topic": "ha_mqtt_agent/workstation/state",
+            "value_template": "{{ value_json.availability.location }}",
+        },
+    ]
 
     geocoded_location_error = messages[
         "homeassistant/sensor/workstation_geocoded_location_error/config"
@@ -212,10 +244,22 @@ def test_location_attributes_message_uses_home_assistant_tracker_attribute_names
     }
 
 
-def test_location_attributes_message_is_skipped_without_coordinates() -> None:
+@pytest.mark.parametrize(
+    ("payload", "description"),
+    [
+        ({"latitude": None, "longitude": None}, "missing both coordinates"),
+        ({"latitude": 45.4642, "longitude": None}, "missing longitude"),
+        ({"latitude": None, "longitude": 9.19}, "missing latitude"),
+    ],
+)
+def test_location_attributes_message_is_skipped_without_coordinates(
+    payload: dict[str, object],
+    description: str,
+) -> None:
+    _ = description
     config = AppConfig(device_id="workstation")
 
-    message = location_attributes_message(config, {"latitude": None, "longitude": None})
+    message = location_attributes_message(config, payload)
 
     assert message is None
 

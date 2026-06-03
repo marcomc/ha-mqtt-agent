@@ -15,6 +15,8 @@ PayloadPostprocessor = Callable[[dict[str, object]], None]
 class TelemetryProvider(Protocol):
     provider_id: str
 
+    def supported_capability_ids(self, config: AppConfig) -> tuple[str, ...]: ...
+
     def sample(
         self,
         config: AppConfig,

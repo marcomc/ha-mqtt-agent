@@ -63,3 +63,52 @@ def test_capability_snapshot_adds_per_entity_availability_to_state_payload() -> 
     assert availability["ping_router"] == "offline"
     assert power is not None
     assert power.source == "macos"
+
+
+def test_capability_snapshot_omits_unsupported_capabilities() -> None:
+    snapshot = capability_snapshot_from_payload(
+        config=AppConfig(),
+        provider="minimal",
+        capability_ids=("uptime",),
+        payload={
+            "uptime_seconds": 123,
+            "power_w": None,
+        },
+    )
+
+    payload = snapshot.state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert availability == {"uptime": "online"}
+    assert snapshot.result("power") is None
+
+
+def test_location_tracker_capability_requires_both_coordinates() -> None:
+    config = AppConfig(publish_location=True)
+
+    latitude_only = capability_snapshot_from_payload(
+        config=config,
+        provider="macos",
+        capability_ids=("location",),
+        payload={"latitude": 45.4642, "longitude": None},
+    )
+    longitude_only = capability_snapshot_from_payload(
+        config=config,
+        provider="macos",
+        capability_ids=("location",),
+        payload={"latitude": None, "longitude": 9.19},
+    )
+    complete = capability_snapshot_from_payload(
+        config=config,
+        provider="macos",
+        capability_ids=("location",),
+        payload={"latitude": 45.4642, "longitude": 9.19},
+    )
+
+    assert cast(dict[str, str], latitude_only.state_payload()["availability"]) == {
+        "location": "offline"
+    }
+    assert cast(dict[str, str], longitude_only.state_payload()["availability"]) == {
+        "location": "offline"
+    }
+    assert cast(dict[str, str], complete.state_payload()["availability"]) == {"location": "online"}

@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ha_mqtt_agent.capabilities import CapabilitySnapshot, capability_snapshot_from_payload
+from ha_mqtt_agent.capabilities import (
+    CapabilitySnapshot,
+    capability_snapshot_from_payload,
+    sensor_registry,
+)
 from ha_mqtt_agent.config import AppConfig
 from ha_mqtt_agent.energy import EnergyAccumulator
 from ha_mqtt_agent.network import NetworkSensorReader, NetworkSnapshotCache
@@ -17,6 +21,9 @@ class MacOSProvider:
     sensor_reader: IoregSensorReader = field(default_factory=IoregSensorReader)
     network_reader: NetworkSensorReader = field(default_factory=NetworkSensorReader)
     provider_id: str = "macos"
+
+    def supported_capability_ids(self, config: AppConfig) -> tuple[str, ...]:
+        return tuple(definition.id for definition in sensor_registry(config))
 
     def sample(
         self,
@@ -37,6 +44,7 @@ class MacOSProvider:
             config=config,
             payload=payload,
             provider=self.provider_id,
+            capability_ids=self.supported_capability_ids(config),
         )
 
     def _payload(

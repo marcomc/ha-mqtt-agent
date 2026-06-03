@@ -313,19 +313,25 @@ Avoid names that duplicate the device name or the word `sensor`.
 
 `0.2.0` is a breaking release for MQTT discovery.
 
-The agent should remove known `0.1.x` retained discovery topics for the current `device_id` on the first successful `0.2.0` MQTT publish. Cleanup should run before publishing new discovery in the same MQTT session.
+The agent should provide an explicit cleanup path for known `0.1.x` retained
+discovery topics for the current `device_id`. Cleanup should run only when the
+operator requests the migration cleanup, or when a future install/upgrade flow
+adds a documented opt-in migration step. Normal runtime publishes must not
+delete retained discovery topics as a steady-state side effect.
 
 Migration flow:
 
 ```text
-connect MQTT
+operator requests legacy cleanup
+  -> connect MQTT
   -> remove known 0.1.x discovery topics for current device_id
   -> publish 0.2.x capability-based discovery
   -> publish state
   -> record legacy cleanup done in local state
 ```
 
-If the session fails before cleanup is recorded, the agent may retry on the next run.
+If the session fails before cleanup is recorded, the agent may retry the next
+time the operator requests cleanup.
 
 Legacy cleanup must not scan broad broker topic trees or remove discovery topics for other devices.
 
@@ -336,7 +342,9 @@ ha-mqtt-agent cleanup-discovery --legacy-0-1
 ha-mqtt-agent publish-once --dry-run --include-cleanup
 ```
 
-Normal runtime missing sensors are not automatically cleaned up. The legacy cleanup is a one-time migration from the old hardcoded discovery model.
+Normal runtime missing sensors are not automatically cleaned up. The legacy
+cleanup is a one-time, operator-controlled migration from the old hardcoded
+discovery model.
 
 ## Configuration
 
@@ -424,5 +432,5 @@ Manual validation:
 - Install and run on the current Mac with the LaunchAgent path.
 - Run `ha-mqtt-agent doctor`, `sample`, `publish-once --dry-run`, and `run`.
 - Validate MQTT discovery in Home Assistant after `0.2.0` legacy cleanup.
-- Install and test on `bmgateway.local` Raspberry Pi.
+- Install and test on a Raspberry Pi OS host.
 - On Raspberry Pi, verify systemd service, `/etc/ha-mqtt-agent/config.toml`, `/var/lib/ha-mqtt-agent/state.json`, local sensors, optional package prompts, and per-entity unavailable behavior.

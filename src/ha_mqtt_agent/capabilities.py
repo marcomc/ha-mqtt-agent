@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -37,6 +37,7 @@ class CapabilityDefinition:
     attributes_template: str | None = None
     entity_category: str | None = None
     null_value_available: bool = False
+    required_payload_keys: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -73,12 +74,26 @@ def capability_snapshot_from_payload(
     config: AppConfig,
     payload: Mapping[str, object],
     provider: str,
+    capability_ids: Iterable[str] | None = None,
 ) -> CapabilitySnapshot:
     results = tuple(
         _capability_result(definition, payload=payload, provider=provider)
-        for definition in sensor_registry(config)
+        for definition in capability_definitions(config, capability_ids=capability_ids)
     )
     return CapabilitySnapshot(provider=provider, payload=payload, results=results)
+
+
+def capability_definitions(
+    config: AppConfig,
+    *,
+    capability_ids: Iterable[str] | None = None,
+) -> tuple[CapabilityDefinition, ...]:
+    definitions = sensor_registry(config)
+    if capability_ids is None:
+        return definitions
+
+    supported = set(capability_ids)
+    return tuple(definition for definition in definitions if definition.id in supported)
 
 
 def sensor_registry(config: AppConfig) -> tuple[CapabilityDefinition, ...]:
@@ -379,6 +394,7 @@ def _location_definitions() -> list[CapabilityDefinition]:
             name="Location",
             payload_key="latitude",
             value_template="",
+            required_payload_keys=("latitude", "longitude"),
         ),
         CapabilityDefinition(
             id="location_cached",
@@ -422,7 +438,10 @@ def _capability_result(
     provider: str,
 ) -> CapabilityResult:
     value = payload.get(definition.payload_key)
-    available = value is not None or definition.null_value_available
+    required_keys = definition.required_payload_keys or (definition.payload_key,)
+    available = all(payload.get(key) is not None for key in required_keys)
+    if definition.null_value_available and len(required_keys) == 1:
+        available = True
     error = None if available else f"{definition.payload_key} unavailable"
     return CapabilityResult(
         id=definition.id,

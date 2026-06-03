@@ -13,7 +13,7 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
 
 from . import __version__
-from .capabilities import CapabilityDefinition, sensor_registry
+from .capabilities import CapabilityDefinition, capability_definitions
 from .config import AppConfig
 
 MQTT_PROBE_CONNACK_TIMEOUT_SECONDS = 5.0
@@ -26,9 +26,13 @@ class MqttMessage:
     retain: bool = True
 
 
-def discovery_messages(config: AppConfig) -> list[MqttMessage]:
+def discovery_messages(
+    config: AppConfig,
+    *,
+    capability_ids: Iterable[str] | None = None,
+) -> list[MqttMessage]:
     messages: list[MqttMessage] = []
-    for definition in sensor_registry(config):
+    for definition in capability_definitions(config, capability_ids=capability_ids):
         if definition.component == "sensor":
             messages.append(_sensor_discovery_message(config, definition))
         elif definition.component == "binary_sensor":
@@ -176,9 +180,7 @@ def _sensor_discovery_message(config: AppConfig, definition: CapabilityDefinitio
         "unique_id": unique_id,
         "object_id": unique_id,
         "state_topic": config.state_topic,
-        "availability_topic": config.availability_topic,
-        "payload_available": "online",
-        "payload_not_available": "offline",
+        **_availability_payload(config, definition),
         "value_template": definition.value_template,
         "expire_after": _expire_after_seconds(config),
         "device": _device_payload(config),
@@ -215,9 +217,7 @@ def _device_tracker_discovery_message(
         "object_id": unique_id,
         "source_type": "gps",
         "json_attributes_topic": config.location_attributes_topic,
-        "availability_topic": config.availability_topic,
-        "payload_available": "online",
-        "payload_not_available": "offline",
+        **_availability_payload(config, definition),
         "device": _device_payload(config),
         "origin": {
             "name": "ha-mqtt-agent",
@@ -239,9 +239,7 @@ def _binary_sensor_discovery_message(
         "unique_id": unique_id,
         "object_id": unique_id,
         "state_topic": config.state_topic,
-        "availability_topic": config.availability_topic,
-        "payload_available": "online",
-        "payload_not_available": "offline",
+        **_availability_payload(config, definition),
         "value_template": definition.value_template,
         "payload_on": "true",
         "payload_off": "false",
@@ -260,6 +258,24 @@ def _binary_sensor_discovery_message(
 
     topic = f"{config.discovery_prefix}/binary_sensor/{unique_id}/config"
     return MqttMessage(topic=topic, payload=json.dumps(payload, sort_keys=True), retain=True)
+
+
+def _availability_payload(
+    config: AppConfig,
+    definition: CapabilityDefinition,
+) -> dict[str, object]:
+    return {
+        "availability": [
+            {"topic": config.availability_topic},
+            {
+                "topic": config.state_topic,
+                "value_template": f"{{{{ value_json.availability.{definition.id} }}}}",
+            },
+        ],
+        "availability_mode": "all",
+        "payload_available": "online",
+        "payload_not_available": "offline",
+    }
 
 
 def _device_payload(config: AppConfig) -> dict[str, object]:
