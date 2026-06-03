@@ -18,6 +18,7 @@ sample_interval_seconds = 5
 expire_after_seconds = 15
 max_energy_gap_seconds = 300
 network_interval_seconds = 60
+capability_refresh_seconds = 300
 ping_timeout_seconds = 1
 wifi_helper_path = "~/.local/share/ha-mqtt-agent/HaMqttAgentWifiHelper.app/Contents/MacOS/HaMqttAgentWifiHelper"
 home_ssids = []

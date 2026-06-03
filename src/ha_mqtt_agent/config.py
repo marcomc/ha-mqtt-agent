@@ -26,6 +26,7 @@ MIN_SAMPLE_INTERVAL_SECONDS = 1.0
 MIN_NETWORK_INTERVAL_SECONDS = 1.0
 MIN_PING_TIMEOUT_SECONDS = 0.1
 MIN_LOCATION_TIMEOUT_SECONDS = 0.1
+MIN_CAPABILITY_REFRESH_SECONDS = 1.0
 MQTT_CLIENT_ID_MAX_BYTES = 23
 
 
@@ -59,6 +60,7 @@ class AppConfig:
     expire_after_seconds: float = 15.0
     max_energy_gap_seconds: float = 300.0
     network_interval_seconds: float = 60.0
+    capability_refresh_seconds: float = 300.0
     ping_timeout_seconds: float = 1.0
     ping_targets: tuple[PingTarget, ...] = DEFAULT_PING_TARGETS
     wifi_helper_path: Path = DEFAULT_WIFI_HELPER_PATH
@@ -141,6 +143,11 @@ def load_config(path: Path) -> AppConfig:
             data.get("network_interval_seconds", 60.0),
             minimum=MIN_NETWORK_INTERVAL_SECONDS,
             key="network_interval_seconds",
+        ),
+        capability_refresh_seconds=_float_at_least(
+            data.get("capability_refresh_seconds", 300.0),
+            minimum=MIN_CAPABILITY_REFRESH_SECONDS,
+            key="capability_refresh_seconds",
         ),
         ping_timeout_seconds=_float_at_least(
             data.get("ping_timeout_seconds", 1.0),

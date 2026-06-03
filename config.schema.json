@@ -60,6 +60,11 @@
       "minimum": 1,
       "default": 60
     },
+    "capability_refresh_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "default": 300
+    },
     "ping_timeout_seconds": {
       "type": "number",
       "minimum": 0.1,

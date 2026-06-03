@@ -32,11 +32,6 @@
 - Roadmap: [HMA-006](docs/roadmap.md#hma-006-mqtt-tls-settings)
 - Add optional TLS settings for hardened MQTT brokers.
 
-### HMA-007 Linux and Raspberry Pi Providers
-
-- Roadmap: [HMA-007](docs/roadmap.md#hma-007-linux-and-raspberry-pi-providers)
-- Add Linux and Raspberry Pi telemetry providers.
-
 ### HMA-008 Release Automation
 
 - Roadmap: [HMA-008](docs/roadmap.md#hma-008-release-automation)

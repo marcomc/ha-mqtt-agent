@@ -23,7 +23,12 @@ class MacOSProvider:
     provider_id: str = "macos"
 
     def supported_capability_ids(self, config: AppConfig) -> tuple[str, ...]:
-        return tuple(definition.id for definition in sensor_registry(config))
+        unsupported = {"cpu_temperature"}
+        return tuple(
+            definition.id
+            for definition in sensor_registry(config)
+            if definition.id not in unsupported
+        )
 
     def sample(
         self,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import Mock, call
@@ -11,6 +12,7 @@ import pytest
 from ha_mqtt_agent import __version__, cli
 from ha_mqtt_agent.capabilities import CapabilitySnapshot, capability_snapshot_from_payload
 from ha_mqtt_agent.config import AppConfig, load_config
+from ha_mqtt_agent.mqtt import MqttMessage
 from ha_mqtt_agent.network import (
     GeocodedLocation,
     LocationStatus,
@@ -19,6 +21,7 @@ from ha_mqtt_agent.network import (
     WifiStatus,
 )
 from ha_mqtt_agent.providers.base import PayloadPostprocessor
+from ha_mqtt_agent.providers.macos import MacOSProvider
 from ha_mqtt_agent.sensors import SensorSample
 
 
@@ -140,6 +143,15 @@ def test_config_reads_expire_after_seconds(tmp_path: Path) -> None:
     config = load_config(config_path)
 
     assert config.expire_after_seconds == 5
+
+
+def test_config_reads_capability_refresh_seconds(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text("capability_refresh_seconds = 120\n", encoding="utf-8")
+
+    config = load_config(config_path)
+
+    assert config.capability_refresh_seconds == 120
 
 
 def test_config_reads_custom_ping_targets(tmp_path: Path) -> None:
@@ -281,8 +293,7 @@ def test_sample_command_does_not_write_energy_state(
         ethernet=(),
         pings=(),
     )
-    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
-    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    _patch_macos_provider(monkeypatch, reader=reader, network_reader=network_reader)
 
     result = cli._handle_sample(config, as_json=True)
 
@@ -359,8 +370,7 @@ def test_sample_payload_reuses_last_known_location_when_current_location_is_unkn
         pings=(),
         location=LocationStatus(error="The operation could not be completed."),
     )
-    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
-    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    _patch_macos_provider(monkeypatch, reader=reader, network_reader=network_reader)
 
     payload = cli._sample_payload(config)
 
@@ -442,8 +452,7 @@ def test_sample_payload_reverse_geocodes_cached_location_when_address_cache_is_m
         stderr="",
     )
     run_helper = Mock(return_value=helper_result)
-    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
-    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    _patch_macos_provider(monkeypatch, reader=reader, network_reader=network_reader)
     monkeypatch.setattr(cli, "_run_wifi_helper_for_cli", run_helper)
 
     payload = cli._sample_payload(config)
@@ -520,8 +529,7 @@ def test_sample_payload_does_not_reverse_geocode_cached_location_in_read_only_mo
         location=LocationStatus(error="The operation could not be completed."),
     )
     run_helper = Mock()
-    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
-    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    _patch_macos_provider(monkeypatch, reader=reader, network_reader=network_reader)
     monkeypatch.setattr(cli, "_run_wifi_helper_for_cli", run_helper)
 
     payload = cli._sample_payload(config, update_energy=False)
@@ -583,8 +591,7 @@ def test_sample_payload_persists_fresh_location_for_later_fallback(
             areas_of_interest=("Duomo di Milano",),
         ),
     )
-    monkeypatch.setattr(cli, "IoregSensorReader", Mock(return_value=reader))
-    monkeypatch.setattr(cli, "NetworkSensorReader", Mock(return_value=network_reader))
+    _patch_macos_provider(monkeypatch, reader=reader, network_reader=network_reader)
 
     payload = cli._sample_payload(config)
 
@@ -635,7 +642,12 @@ def test_publish_once_sends_discovery_availability_and_state(
         },
     )
 
-    result = cli._handle_publish_once(config, skip_discovery=False)
+    result = cli._handle_publish_once(
+        config,
+        skip_discovery=False,
+        dry_run=False,
+        include_cleanup=False,
+    )
 
     assert result == 0
     messages = list(publish_mock.call_args.args[1])
@@ -656,7 +668,12 @@ def test_publish_once_discovers_only_provider_supported_capabilities(
     monkeypatch.setattr(cli, "publish_messages", publish_mock)
     monkeypatch.setattr(cli, "_telemetry_provider", lambda: _UptimeOnlyProvider())
 
-    result = cli._handle_publish_once(config, skip_discovery=False)
+    result = cli._handle_publish_once(
+        config,
+        skip_discovery=False,
+        dry_run=False,
+        include_cleanup=False,
+    )
 
     assert result == 0
     messages = list(publish_mock.call_args.args[1])
@@ -689,12 +706,90 @@ def test_publish_once_skips_location_attributes_when_location_is_disabled(
         },
     )
 
-    result = cli._handle_publish_once(config, skip_discovery=False)
+    result = cli._handle_publish_once(
+        config,
+        skip_discovery=False,
+        dry_run=False,
+        include_cleanup=False,
+    )
 
     assert result == 0
     topics = [message.topic for message in publish_mock.call_args.args[1]]
     assert "homeassistant/device_tracker/host_location/config" not in topics
     assert "ha_mqtt_agent/host/location/attributes" not in topics
+
+
+def test_publish_once_dry_run_renders_messages_without_publish_or_state_write(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    publish_mock = Mock()
+    monkeypatch.setattr(cli, "publish_messages", publish_mock)
+    monkeypatch.setattr(cli, "_telemetry_provider", lambda: _UptimeOnlyProvider())
+
+    result = cli._handle_publish_once(
+        config,
+        skip_discovery=False,
+        dry_run=True,
+        include_cleanup=True,
+    )
+
+    captured = capsys.readouterr()
+    messages = json.loads(captured.out)
+    topics = [message["topic"] for message in messages]
+    assert result == 0
+    assert "homeassistant/sensor/host_power/config" in topics
+    assert "homeassistant/sensor/host_uptime/config" in topics
+    assert "ha_mqtt_agent/host/state" in topics
+    assert json.loads(messages[-1]["payload"])["availability"] == {"uptime": "online"}
+    publish_mock.assert_not_called()
+    assert not config.state_path.exists()
+
+
+def test_cleanup_discovery_records_completion_after_successful_publish(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    captured: dict[str, list[MqttMessage]] = {}
+
+    def publish(
+        _config: AppConfig,
+        messages: Iterable[MqttMessage],
+        *,
+        client_id_suffix: str = "",
+    ) -> None:
+        _ = client_id_suffix
+        captured["messages"] = list(messages)
+
+    monkeypatch.setattr(cli, "publish_messages", publish)
+    monkeypatch.setattr(cli, "_telemetry_provider", lambda: _UptimeOnlyProvider())
+    monkeypatch.setattr(cli, "datetime_now_iso", lambda: "2026-06-03T10:00:00+00:00")
+
+    result = cli._handle_cleanup_discovery(config, legacy_0_1=True)
+
+    state = json.loads(config.state_path.read_text(encoding="utf-8"))
+    topics = [message.topic for message in captured["messages"]]
+    assert result == 0
+    assert "homeassistant/sensor/host_power/config" in topics
+    assert "homeassistant/sensor/host_uptime/config" in topics
+    assert state["legacy_0_1_discovery_cleanup_completed_at"] == ("2026-06-03T10:00:00+00:00")
+
+
+def test_cleanup_discovery_does_not_record_completion_when_publish_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    monkeypatch.setattr(cli, "publish_messages", Mock(side_effect=OSError("broker down")))
+    monkeypatch.setattr(cli, "_telemetry_provider", lambda: _UptimeOnlyProvider())
+
+    with pytest.raises(OSError, match="broker down"):
+        cli._handle_cleanup_discovery(config, legacy_0_1=True)
+
+    assert not config.state_path.exists()
 
 
 def test_publish_once_defers_sampling_until_after_mqtt_connect(
@@ -813,6 +908,16 @@ def test_next_publish_delay_caps_without_large_integer_overflow() -> None:
     assert cli._next_publish_delay(config, 1) == 30.0
     assert cli._next_publish_delay(config, 2) == 60.0
     assert cli._next_publish_delay(config, 10_000) == 60.0
+
+
+def _patch_macos_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    reader: Mock,
+    network_reader: Mock,
+) -> None:
+    provider = MacOSProvider(sensor_reader=reader, network_reader=network_reader)
+    monkeypatch.setattr(cli, "_telemetry_provider", lambda: provider)
 
 
 class _UptimeOnlyProvider:

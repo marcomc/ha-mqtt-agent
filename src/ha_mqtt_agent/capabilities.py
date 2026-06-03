@@ -75,9 +75,19 @@ def capability_snapshot_from_payload(
     payload: Mapping[str, object],
     provider: str,
     capability_ids: Iterable[str] | None = None,
+    unavailable_ids: Iterable[str] = (),
+    errors: Mapping[str, str] | None = None,
 ) -> CapabilitySnapshot:
+    unavailable = set(unavailable_ids)
+    resolved_errors = errors or {}
     results = tuple(
-        _capability_result(definition, payload=payload, provider=provider)
+        _capability_result(
+            definition,
+            payload=payload,
+            provider=provider,
+            force_unavailable=definition.id in unavailable,
+            error=resolved_errors.get(definition.id),
+        )
         for definition in capability_definitions(config, capability_ids=capability_ids)
     )
     return CapabilitySnapshot(provider=provider, payload=payload, results=results)
@@ -175,6 +185,16 @@ def sensor_registry(config: AppConfig) -> tuple[CapabilityDefinition, ...]:
             state_class="measurement",
             unit="°C",
             value_template="{{ value_json.battery_virtual_temperature_c }}",
+        ),
+        CapabilityDefinition(
+            id="cpu_temperature",
+            group="temperature",
+            name="CPU temperature",
+            payload_key="cpu_temperature_c",
+            device_class="temperature",
+            state_class="measurement",
+            unit="°C",
+            value_template="{{ value_json.cpu_temperature_c }}",
         ),
         CapabilityDefinition(
             id="battery_cycle_count",
@@ -436,17 +456,21 @@ def _capability_result(
     *,
     payload: Mapping[str, object],
     provider: str,
+    force_unavailable: bool = False,
+    error: str | None = None,
 ) -> CapabilityResult:
     value = payload.get(definition.payload_key)
     required_keys = definition.required_payload_keys or (definition.payload_key,)
     available = all(payload.get(key) is not None for key in required_keys)
     if definition.null_value_available and len(required_keys) == 1:
         available = True
-    error = None if available else f"{definition.payload_key} unavailable"
+    if force_unavailable:
+        available = False
+    resolved_error = None if available else error or f"{definition.payload_key} unavailable"
     return CapabilityResult(
         id=definition.id,
         available=available,
         value=value,
         source=provider,
-        error=error,
+        error=resolved_error,
     )

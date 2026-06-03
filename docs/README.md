@@ -6,18 +6,21 @@
   model, current implementation status, Linux and macOS install behavior, MQTT
   discovery, and legacy cleanup.
 - [Home Assistant Setup](home-assistant-setup.md): configure MQTT discovery,
-  confirm the Mac device, and add its energy sensor to the Energy dashboard.
+  confirm the host device, and add supported entities to dashboards.
 - [Roadmap](roadmap.md): future command, security, provider, and release work
   linked to numbered backlog tickets in [TODO.md](../TODO.md).
 
 ## Installer Shape
 
-`scripts/install.sh` is the user-facing entrypoint for a new Mac. It validates
-basic prerequisites and delegates to `make install`.
+`scripts/install.sh` is the user-facing entrypoint for a new host. It delegates
+to the macOS LaunchAgent installer on Darwin and the Linux systemd installer on
+Linux.
 
 The `Makefile` remains the durable automation API for install, restart, status,
-uninstall, development checks, and tests. Keep installer shell code thin so the
-operational behavior is defined in one place.
+uninstall, development checks, and tests. macOS keeps the per-user LaunchAgent
+flow. Linux installs a system service with `/etc/ha-mqtt-agent/config.toml`,
+`/var/lib/ha-mqtt-agent/state.json`, and the unprivileged `ha-mqtt-agent`
+runtime user.
 
 ## Included Defaults
 
@@ -26,6 +29,8 @@ operational behavior is defined in one place.
 - `src/` package layout
 - `argparse` for a small CLI surface
 - TOML config loading via `tomllib`
+- platform provider selection for macOS and Linux
+- `doctor`, `publish-once --dry-run`, and explicit legacy discovery cleanup
 - `make check` for tests, typing, formatting, Markdown, and shell linting
 
 ## Intended Workflow
