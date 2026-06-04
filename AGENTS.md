@@ -78,6 +78,9 @@ Expected checks:
 - When adding Linux provider capabilities, test optional tools present without
   matching hardware and hardware present without optional tools. Installed tools
   alone must not create discovery entities.
+- When provider tests inject command runners, keep command availability
+  separately injectable so fixtures can model missing optional tools without
+  overstating supported capabilities.
 - When changing platform install paths, keep uninstall symmetric for runtime
   artifacts and preserve user config/state unless the command documents removal.
 
