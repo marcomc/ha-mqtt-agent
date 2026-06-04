@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Purpose](#purpose)
+- [Implementation Status](#implementation-status)
 - [Goals](#goals)
 - [Supported Platforms](#supported-platforms)
 - [Detection Model](#detection-model)
@@ -21,7 +22,25 @@
 
 `ha-mqtt-agent` should install and run on macOS and normal Linux hosts, including Raspberry Pi OS. It should detect the platform, service manager, tools, permissions, and readable sensors on the machine where it is running, then publish only real values that can actually be collected from that machine.
 
-This document is the implementation target for the breaking `0.2.0` cross-platform rewrite.
+This document describes the implemented cross-platform runtime and installer
+shape for `0.2.0`.
+
+## Implementation Status
+
+Implemented in `0.2.0`:
+
+- Shared capability registry and normalized capability snapshots.
+- macOS provider wrapper around the existing telemetry readers.
+- Linux and Raspberry Pi provider using readable `/proc`, `/sys`, and network
+  facts.
+- MQTT discovery generated from capability definitions.
+- Provider-supported capability filtering for discovery and state payloads.
+- Per-entity availability in MQTT state.
+- Linux `systemd` installer with an unprivileged service user.
+- Read-only `doctor` command, including MQTT CONNACK checks with `--mqtt`.
+- `publish-once --dry-run` exact message rendering without MQTT publishes or
+  state writes.
+- Explicit legacy MQTT discovery cleanup command.
 
 ## Goals
 
@@ -37,13 +56,13 @@ This document is the implementation target for the breaking `0.2.0` cross-platfo
 
 ## Supported Platforms
 
-The first cross-platform release targets:
+The cross-platform release targets:
 
 - macOS with the existing per-user LaunchAgent model.
 - Raspberry Pi OS and Debian-style Linux systems.
 - Generic Linux systems with `systemd`.
 
-Out of scope for the first release:
+Out of scope:
 
 - Windows.
 - OpenWrt.
@@ -111,9 +130,6 @@ energy
 wifi_ssid
 wifi_signal_dbm
 default_gateway
-agent_status
-agent_capabilities
-agent_errors
 ```
 
 Providers return normalized facts, not Home Assistant-specific payloads:
@@ -215,10 +231,9 @@ During normal operation:
 - Publish `null` for supported sensors that are currently unreadable.
 - Publish per-entity availability status.
 - Keep the device online if the agent and MQTT connection are healthy.
-- Set `agent_status` to `degraded` when one or more supported sensors fail.
-- Refresh capabilities periodically using one global interval.
+- Refresh discovery periodically using one global interval.
 
-Recommended default:
+Default:
 
 ```toml
 capability_refresh_seconds = 300
@@ -232,17 +247,16 @@ capability becomes available
   -> publish real state on the next sample
 ```
 
-When a previously available capability disappears:
+When a supported capability read fails:
 
 ```text
-capability disappears
-  -> keep discovery
+capability read fails
   -> publish null value
   -> mark the entity unavailable
-  -> publish a concise diagnostic reason
 ```
 
-The agent must not automatically delete missing runtime capabilities. Explicit cleanup preserves evidence when hardware, permissions, or drivers fail.
+The agent must not automatically delete missing runtime capabilities. Explicit
+cleanup preserves evidence when hardware, permissions, or drivers fail.
 
 ## MQTT Discovery
 
@@ -313,8 +327,8 @@ Avoid names that duplicate the device name or the word `sensor`.
 
 `0.2.0` is a breaking release for MQTT discovery.
 
-The agent should provide an explicit cleanup path for known `0.1.x` retained
-discovery topics for the current `device_id`. Cleanup should run only when the
+The agent provides an explicit cleanup path for known `0.1.x` retained
+discovery topics for the current `device_id`. Cleanup runs only when the
 operator requests the migration cleanup, or when a future install/upgrade flow
 adds a documented opt-in migration step. Normal runtime publishes must not
 delete retained discovery topics as a steady-state side effect.
@@ -335,7 +349,7 @@ time the operator requests cleanup.
 
 Legacy cleanup must not scan broad broker topic trees or remove discovery topics for other devices.
 
-Manual commands should also exist:
+Manual commands:
 
 ```bash
 ha-mqtt-agent cleanup-discovery --legacy-0-1
@@ -348,29 +362,16 @@ discovery model.
 
 ## Configuration
 
-Capability controls should support automatic detection plus user opt-out.
-
-Example target shape:
+The current release uses automatic capability detection. The runtime publishes
+only capabilities supported by the active provider and refreshes discovery on
+this interval:
 
 ```toml
 capability_refresh_seconds = 300
-
-[capabilities]
-battery = "auto"
-power = "auto"
-network = "auto"
-wifi = "auto"
-temperature = "auto"
-ping = "auto"
-location = "off"
 ```
 
-Initial meanings:
-
-- `auto`: publish if real and readable.
-- `off`: never publish.
-
-Do not add forced `on` in the first release. A future `required` mode can be added if operators want startup failure when a sensor is missing.
+Per-capability opt-out controls are not implemented yet. A future config table
+can add `auto`, `off`, or `required` modes if operators need stricter control.
 
 Default config paths:
 
@@ -389,21 +390,22 @@ The global `--config` option always overrides platform defaults.
 
 ## Implementation Shape
 
-The rewrite should replace the hardcoded macOS-only runtime with a shared capability engine.
+The runtime now uses a shared capability engine instead of a hardcoded
+macOS-only provider.
 
-Recommended modules:
+Core modules:
 
 ```text
 src/ha_mqtt_agent/capabilities.py
 src/ha_mqtt_agent/providers/base.py
 src/ha_mqtt_agent/providers/macos.py
 src/ha_mqtt_agent/providers/linux.py
-src/ha_mqtt_agent/discovery.py
+src/ha_mqtt_agent/mqtt.py
 src/ha_mqtt_agent/doctor.py
 src/ha_mqtt_agent/installer.py
 ```
 
-The exact filenames can change to match the final implementation, but the ownership boundaries should remain:
+Ownership boundaries:
 
 - Providers read platform-specific facts.
 - Capability engine normalizes support, values, source, and errors.

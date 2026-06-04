@@ -15,19 +15,20 @@ from typing import SupportsFloat, SupportsIndex
 
 from . import __version__
 from .config import DEFAULT_CONFIG_PATH, AppConfig, load_config
+from .doctor import build_doctor_report, render_doctor_text
 from .mqtt import (
     MqttMessage,
     availability_message,
     discovery_messages,
+    legacy_0_1_discovery_cleanup_messages,
     location_attributes_message,
     probe_mqtt_connection,
     publish_messages,
     state_message,
 )
-from .network import NetworkSensorReader, NetworkSnapshotCache
+from .network import NetworkSnapshotCache
+from .providers import select_telemetry_provider
 from .providers.base import TelemetryProvider
-from .providers.macos import MacOSProvider
-from .sensors import IoregSensorReader
 
 OPEN_PATH = "/usr/bin/open"
 MAX_PUBLISH_RETRY_SECONDS = 60.0
@@ -35,6 +36,7 @@ MIN_PUBLISH_RETRY_SECONDS = 30.0
 MIN_RECOVERY_PROBE_SECONDS = 15.0
 LAST_LOCATION_KEY = "last_location"
 LAST_GEOCODED_LOCATION_KEY = "last_geocoded_location"
+LEGACY_0_1_CLEANUP_KEY = "legacy_0_1_discovery_cleanup_completed_at"
 GEOCODED_LOCATION_PAYLOAD_KEYS = {
     "state": "geocoded_location",
     "name": "geocoded_location_name",
@@ -65,8 +67,10 @@ def format_main_help() -> str:
             "Commands:",
             "  info          Show resolved configuration and runtime metadata",
             "  sample        Read local power and battery telemetry once",
+            "  doctor        Check local readiness without changing state",
             "  authorize-wifi Ask macOS for permission to read the Wi-Fi SSID",
             "  publish-once  Publish discovery and one telemetry sample",
+            "  cleanup-discovery Remove retained legacy discovery topics",
             "  run           Publish telemetry continuously",
             "",
             "Run `ha-mqtt-agent <command> --help` for command-specific help.",
@@ -115,6 +119,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print structured JSON output.",
     )
 
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Check local readiness without writes or publishes.",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print structured JSON output.",
+    )
+    doctor_parser.add_argument(
+        "--verbose",
+        dest="doctor_verbose",
+        action="store_true",
+        help="Print tool and capability details.",
+    )
+    doctor_parser.add_argument(
+        "--mqtt",
+        action="store_true",
+        help="Connect to MQTT and verify CONNACK without publishing.",
+    )
+
     authorize_wifi_parser = subparsers.add_parser(
         "authorize-wifi",
         help="Ask macOS for Location permission so the Wi-Fi SSID can be read.",
@@ -133,6 +158,26 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-discovery",
         action="store_true",
         help="Publish only state and availability topics.",
+    )
+    publish_once_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Render discovery, state, and availability messages without publishing.",
+    )
+    publish_once_parser.add_argument(
+        "--include-cleanup",
+        action="store_true",
+        help="With --dry-run, include legacy 0.1.x cleanup messages in the preview.",
+    )
+
+    cleanup_parser = subparsers.add_parser(
+        "cleanup-discovery",
+        help="Explicitly remove retained legacy discovery topics for this device.",
+    )
+    cleanup_parser.add_argument(
+        "--legacy-0-1",
+        action="store_true",
+        help="Clean known 0.1.x retained discovery topics for the current device_id.",
     )
 
     run_parser = subparsers.add_parser(
@@ -171,6 +216,7 @@ def _info_payload(config: AppConfig, config_path: Path) -> dict[str, object]:
         "state_path": str(config.state_path),
         "sample_interval_seconds": config.sample_interval_seconds,
         "network_interval_seconds": config.network_interval_seconds,
+        "capability_refresh_seconds": config.capability_refresh_seconds,
         "ping_timeout_seconds": config.ping_timeout_seconds,
         "wifi_helper_path": str(config.wifi_helper_path),
         "wifi_helper_exists": config.wifi_helper_path.exists(),
@@ -210,6 +256,7 @@ def _handle_info(config: AppConfig, config_path: Path, as_json: bool) -> int:
     print(f"state_path: {config.state_path}")
     print(f"sample_interval_seconds: {config.sample_interval_seconds}")
     print(f"network_interval_seconds: {config.network_interval_seconds}")
+    print(f"capability_refresh_seconds: {config.capability_refresh_seconds}")
     print(f"ping_timeout_seconds: {config.ping_timeout_seconds}")
     print(f"wifi_helper_path: {config.wifi_helper_path}")
     print(f"wifi_helper_exists: {config.wifi_helper_path.exists()}")
@@ -353,10 +400,7 @@ def _sample_payload(
 
 
 def _telemetry_provider() -> TelemetryProvider:
-    return MacOSProvider(
-        sensor_reader=IoregSensorReader(),
-        network_reader=NetworkSensorReader(),
-    )
+    return select_telemetry_provider()
 
 
 def _apply_location_cache(
@@ -650,38 +694,33 @@ def _handle_sample(config: AppConfig, as_json: bool) -> int:
         print(json.dumps(payload, indent=2, sort_keys=True))
         return 0
 
-    print(f"host_name: {payload['host_name']}")
-    print(f"power_w: {payload['power_w']}")
-    print(f"energy_kwh: {payload['energy_kwh']}")
-    print(f"uptime_seconds: {payload['uptime_seconds']}")
-    print(f"battery_percent: {payload['battery_percent']}")
-    print(f"battery_max_capacity_percent: {payload['battery_max_capacity_percent']}")
-    print(f"battery_max_capacity_mah: {payload['battery_max_capacity_mah']}")
-    print(f"battery_temperature_c: {payload['battery_temperature_c']}")
-    print(f"battery_status: {payload['battery_status']}")
-    print(f"wifi_ssid: {payload['wifi_ssid']}")
-    print(f"wifi_bssid: {payload['wifi_bssid']}")
-    print(f"wifi_signal_dbm: {payload['wifi_signal_dbm']}")
-    print(f"wifi_signal_percent: {payload['wifi_signal_percent']}")
-    print(f"ipv4_addresses: {payload['ipv4_addresses']}")
-    print(f"default_gateways: {payload['default_gateways']}")
-    print(f"default_gateway_interfaces: {payload['default_gateway_interfaces']}")
-    print(f"gateway_macs: {payload['gateway_macs']}")
-    print(f"home_network_present: {payload['home_network_present']}")
-    print(f"latitude: {payload['latitude']}")
-    print(f"longitude: {payload['longitude']}")
-    print(f"location_accuracy_m: {payload['location_accuracy_m']}")
-    print(f"location_cached: {payload['location_cached']}")
-    print(f"location_last_seen: {payload['location_last_seen']}")
-    print(f"location_error: {payload['location_error']}")
-    print(f"geocoded_location: {payload['geocoded_location']}")
-    print(f"geocoded_location_cached: {payload['geocoded_location_cached']}")
-    print(f"geocoded_location_error: {payload['geocoded_location_error']}")
-    print(f"ethernet_active_count: {payload['ethernet_active_count']}")
-    print(f"ethernet_active_interfaces: {payload['ethernet_active_interfaces']}")
-    for target in config.ping_targets:
-        print(f"ping_{target.id}_ms: {payload[f'ping_{target.id}_ms']}")
+    for key in sorted(key for key in payload if key != "availability"):
+        print(f"{key}: {payload[key]}")
     return 0
+
+
+def _handle_doctor(
+    config: AppConfig,
+    config_path: Path,
+    *,
+    as_json: bool,
+    verbose: bool,
+    check_mqtt: bool,
+) -> int:
+    report, exit_code = build_doctor_report(
+        config=config,
+        config_path=config_path,
+        check_mqtt=check_mqtt,
+        mqtt_probe=lambda probe_config: probe_mqtt_connection(
+            probe_config,
+            client_id_suffix=f"-doctor-{os.getpid()}",
+        ),
+    )
+    if as_json:
+        print(json.dumps(report, indent=2, sort_keys=True))
+    else:
+        print(render_doctor_text(report, verbose=verbose))
+    return exit_code
 
 
 def _publish_once(
@@ -692,25 +731,74 @@ def _publish_once(
     client_id_suffix: str = "",
 ) -> None:
     provider = _telemetry_provider()
+    publish_messages(
+        config,
+        _publish_once_messages(
+            config,
+            provider=provider,
+            skip_discovery=skip_discovery,
+            network_cache=network_cache,
+            update_energy=True,
+            include_cleanup=False,
+        ),
+        client_id_suffix=client_id_suffix,
+    )
 
-    def messages() -> Iterable[MqttMessage]:
-        if not skip_discovery:
-            yield from discovery_messages(
+
+def _publish_once_messages(
+    config: AppConfig,
+    *,
+    provider: TelemetryProvider,
+    skip_discovery: bool,
+    network_cache: NetworkSnapshotCache | None = None,
+    update_energy: bool,
+    include_cleanup: bool,
+) -> Iterable[MqttMessage]:
+    if include_cleanup:
+        yield from legacy_0_1_discovery_cleanup_messages(config)
+    if not skip_discovery:
+        yield from discovery_messages(
+            config,
+            capability_ids=provider.supported_capability_ids(config),
+        )
+    yield availability_message(config, "online")
+    payload = _sample_payload(
+        config,
+        update_energy=update_energy,
+        network_cache=network_cache,
+        provider=provider,
+    )
+    yield state_message(config, payload)
+    if config.publish_location:
+        location_message = location_attributes_message(config, payload)
+        if location_message is not None:
+            yield location_message
+
+
+def _handle_publish_once(
+    config: AppConfig,
+    *,
+    skip_discovery: bool,
+    dry_run: bool,
+    include_cleanup: bool,
+) -> int:
+    if include_cleanup and not dry_run:
+        print("--include-cleanup is only supported with --dry-run", file=sys.stderr)
+        return 2
+    if dry_run:
+        provider = _telemetry_provider()
+        messages = list(
+            _publish_once_messages(
                 config,
-                capability_ids=provider.supported_capability_ids(config),
+                provider=provider,
+                skip_discovery=skip_discovery,
+                update_energy=False,
+                include_cleanup=include_cleanup,
             )
-        yield availability_message(config, "online")
-        payload = _sample_payload(config, network_cache=network_cache, provider=provider)
-        yield state_message(config, payload)
-        if config.publish_location:
-            location_message = location_attributes_message(config, payload)
-            if location_message is not None:
-                yield location_message
+        )
+        _print_messages_json(messages)
+        return 0
 
-    publish_messages(config, messages(), client_id_suffix=client_id_suffix)
-
-
-def _handle_publish_once(config: AppConfig, *, skip_discovery: bool) -> int:
     _publish_once(
         config,
         skip_discovery=skip_discovery,
@@ -719,9 +807,66 @@ def _handle_publish_once(config: AppConfig, *, skip_discovery: bool) -> int:
     return 0
 
 
+def _handle_cleanup_discovery(config: AppConfig, *, legacy_0_1: bool) -> int:
+    if not legacy_0_1:
+        print("cleanup-discovery requires --legacy-0-1", file=sys.stderr)
+        return 2
+    provider = _telemetry_provider()
+    publish_messages(
+        config,
+        _publish_once_messages(
+            config,
+            provider=provider,
+            skip_discovery=False,
+            update_energy=False,
+            include_cleanup=True,
+        ),
+        client_id_suffix=f"-cleanup-{os.getpid()}",
+    )
+    _record_legacy_0_1_cleanup(config.state_path)
+    return 0
+
+
+def _print_messages_json(messages: Iterable[MqttMessage]) -> None:
+    print(
+        json.dumps(
+            [
+                {
+                    "topic": message.topic,
+                    "payload": message.payload,
+                    "retain": message.retain,
+                }
+                for message in messages
+            ],
+            indent=2,
+            sort_keys=True,
+        )
+    )
+
+
+def _record_legacy_0_1_cleanup(state_path: Path) -> None:
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data[LEGACY_0_1_CLEANUP_KEY] = datetime_now_iso()
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def datetime_now_iso() -> str:
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).isoformat()
+
+
 def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
     network_cache = NetworkSnapshotCache()
     failure_count = 0
+    discovery_disabled = skip_discovery
+    last_discovery_monotonic: float | None = None
     while True:
         if failure_count > 0:
             try:
@@ -731,10 +876,17 @@ def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
                 time.sleep(_next_recovery_probe_delay(config))
                 continue
 
+        publish_skip_discovery = True
+        if not discovery_disabled and (
+            last_discovery_monotonic is None
+            or time.monotonic() - last_discovery_monotonic >= config.capability_refresh_seconds
+        ):
+            publish_skip_discovery = False
+
         try:
             _publish_once(
                 config,
-                skip_discovery=skip_discovery,
+                skip_discovery=publish_skip_discovery,
                 network_cache=network_cache,
                 client_id_suffix=f"-once-{os.getpid()}" if once else "",
             )
@@ -744,7 +896,8 @@ def _handle_run(config: AppConfig, *, skip_discovery: bool, once: bool) -> int:
             failure_count += 1
             print(f"publish failed: {exc}", file=sys.stderr, flush=True)
         else:
-            skip_discovery = True
+            if not publish_skip_discovery:
+                last_discovery_monotonic = time.monotonic()
             failure_count = 0
         if once:
             return 0
@@ -795,6 +948,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "sample":
         as_json = bool(getattr(args, "json", False))
         return _handle_sample(config=config, as_json=as_json)
+    if args.command == "doctor":
+        as_json = bool(getattr(args, "json", False))
+        return _handle_doctor(
+            config=config,
+            config_path=args.config,
+            as_json=as_json,
+            verbose=bool(getattr(args, "doctor_verbose", False)),
+            check_mqtt=bool(getattr(args, "mqtt", False)),
+        )
     if args.command == "authorize-wifi":
         as_json = bool(getattr(args, "json", False))
         return _handle_authorize_wifi(config=config, as_json=as_json)
@@ -802,6 +964,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _handle_publish_once(
             config=config,
             skip_discovery=bool(getattr(args, "skip_discovery", False)),
+            dry_run=bool(getattr(args, "dry_run", False)),
+            include_cleanup=bool(getattr(args, "include_cleanup", False)),
+        )
+    if args.command == "cleanup-discovery":
+        return _handle_cleanup_discovery(
+            config=config,
+            legacy_0_1=bool(getattr(args, "legacy_0_1", False)),
         )
     if args.command == "run":
         return _handle_run(

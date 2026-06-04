@@ -12,8 +12,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   first step toward platform-specific macOS and Linux providers.
 - Added a macOS provider wrapper around the existing AppleSmartBattery, energy,
   network, Wi-Fi, ping, and location telemetry paths.
-- Added cross-platform architecture documentation for the planned `0.2.0`
-  provider model, installer behavior, MQTT discovery migration, and tests.
+- Added Linux and Raspberry Pi provider selection with real `/proc`, `/sys`,
+  network, Wi-Fi, gateway, ping, CPU temperature, and battery facts where
+  readable.
+- Added `ha-mqtt-agent doctor`, `doctor --json`, `doctor --verbose`, and
+  `doctor --mqtt` read-only diagnostics.
+- Added `publish-once --dry-run` to render exact MQTT discovery, state, and
+  availability messages without publishing or writing state.
+- Added explicit `cleanup-discovery --legacy-0-1` retained-topic cleanup for
+  known `0.1.x` discovery topics belonging to the current `device_id`.
+- Added Linux systemd install support with an unprivileged `ha-mqtt-agent`
+  service user, `/etc/ha-mqtt-agent/config.toml`, and
+  `/var/lib/ha-mqtt-agent/state.json`.
+- Added cross-platform architecture documentation for the provider model,
+  current implementation status, installer behavior, MQTT discovery migration,
+  and tests.
+- Added `capability_refresh_seconds` so continuous runs periodically refresh
+  discovery for newly readable capabilities.
 
 ### Changed in 0.2.0
 
@@ -24,6 +39,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - MQTT state payloads now include per-entity availability, and discovery
   entities subscribe to both device availability and their own capability
   availability.
+- `make install`, `restart-agent`, `agent-status`, and `uninstall-agent` now
+  dispatch to the platform service model.
 
 ## [0.1.3] - 2026-05-22
 

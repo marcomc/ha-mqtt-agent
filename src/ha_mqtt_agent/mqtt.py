@@ -6,7 +6,7 @@ import json
 import math
 import threading
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, SupportsFloat, SupportsIndex
 
 import paho.mqtt.client as mqtt
@@ -17,6 +17,40 @@ from .capabilities import CapabilityDefinition, capability_definitions
 from .config import AppConfig
 
 MQTT_PROBE_CONNACK_TIMEOUT_SECONDS = 5.0
+LEGACY_0_1_CAPABILITY_IDS = {
+    "power",
+    "energy",
+    "battery",
+    "battery_max_capacity",
+    "battery_max_capacity_mah",
+    "battery_design_capacity",
+    "battery_temperature",
+    "battery_virtual_temperature",
+    "battery_cycle_count",
+    "battery_status",
+    "uptime",
+    "wifi_ssid",
+    "wifi_bssid",
+    "wifi_signal_dbm",
+    "wifi_signal_percent",
+    "ipv4_addresses",
+    "default_gateways",
+    "default_gateway_interfaces",
+    "gateway_macs",
+    "ethernet_active_count",
+    "ethernet_active_interfaces",
+    "home_network_present",
+    "latitude",
+    "longitude",
+    "location_accuracy",
+    "location_last_seen",
+    "location_error",
+    "geocoded_location",
+    "geocoded_location_error",
+    "location",
+    "location_cached",
+    "geocoded_location_cached",
+}
 
 
 @dataclass(frozen=True)
@@ -39,6 +73,18 @@ def discovery_messages(
             messages.append(_binary_sensor_discovery_message(config, definition))
         elif definition.component == "device_tracker":
             messages.append(_device_tracker_discovery_message(config, definition))
+    return messages
+
+
+def legacy_0_1_discovery_cleanup_messages(config: AppConfig) -> list[MqttMessage]:
+    cleanup_config = replace(config, publish_location=True)
+    messages: list[MqttMessage] = []
+    for definition in capability_definitions(cleanup_config):
+        if definition.id not in LEGACY_0_1_CAPABILITY_IDS and not definition.id.startswith("ping_"):
+            continue
+        unique_id = f"{config.device_id}_{definition.id}"
+        topic = f"{config.discovery_prefix}/{definition.component}/{unique_id}/config"
+        messages.append(MqttMessage(topic=topic, payload="", retain=True))
     return messages
 
 

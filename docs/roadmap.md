@@ -2,9 +2,9 @@
 
 ## Overview
 
-The first public release is macOS telemetry-only. Future work should preserve
-the current model: the Mac opens an outbound MQTT connection, publishes state,
-and does not require Home Assistant to connect directly to the Mac.
+The current release publishes host telemetry from macOS and Linux through an
+outbound MQTT connection. Future work should preserve the model where Home
+Assistant does not connect directly to the host.
 
 Backlog tickets are tracked in [TODO.md](../TODO.md).
 
@@ -70,16 +70,6 @@ Add optional TLS configuration for hardened brokers.
 - Document broker-side expectations.
 
 Backlog: [HMA-006](../TODO.md#hma-006-mqtt-tls-settings)
-
-## HMA-007 Linux and Raspberry Pi Providers
-
-Add non-macOS telemetry providers.
-
-- Keep macOS AppleSmartBattery support as the first provider.
-- Add Linux power-source detection behind provider selection.
-- Document unsupported sensors clearly on Raspberry Pi.
-
-Backlog: [HMA-007](../TODO.md#hma-007-linux-and-raspberry-pi-providers)
 
 ## HMA-008 Release Automation
 

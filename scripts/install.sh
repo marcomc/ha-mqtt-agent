@@ -7,9 +7,19 @@ CONFIG_PATH="${HOME}/.config/ha-mqtt-agent/config.toml"
 cd "${PROJECT_ROOT}"
 
 OS_NAME=$(uname -s)
+if [ "${OS_NAME}" = "Linux" ]; then
+  ./scripts/install-systemd-service.sh "$@"
+  exit 0
+fi
+
 if [ "${OS_NAME}" != "Darwin" ]; then
-  echo "Home Assistant MQTT Agent currently supports macOS only." >&2
+  echo "Unsupported platform: ${OS_NAME}" >&2
   exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+  echo "macOS install does not accept Linux systemd options." >&2
+  exit 2
 fi
 
 if ! command -v make >/dev/null 2>&1; then
@@ -32,7 +42,7 @@ if ! command -v codesign >/dev/null 2>&1; then
   exit 1
 fi
 
-make install STANDALONE_PYTHON="${STANDALONE_PYTHON}"
+make install-macos STANDALONE_PYTHON="${STANDALONE_PYTHON}"
 
 echo
 echo "Installed Home Assistant MQTT Agent."

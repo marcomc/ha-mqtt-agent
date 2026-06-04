@@ -11,6 +11,7 @@ from ha_mqtt_agent.config import AppConfig
 from ha_mqtt_agent.mqtt import (
     MqttMessage,
     discovery_messages,
+    legacy_0_1_discovery_cleanup_messages,
     location_attributes_message,
     probe_mqtt_connection,
     publish_messages,
@@ -124,6 +125,19 @@ def test_discovery_messages_are_limited_to_supported_capabilities() -> None:
         "homeassistant/sensor/workstation_uptime/config",
         "homeassistant/device_tracker/workstation_location/config",
     }
+
+
+def test_legacy_cleanup_messages_remove_known_current_device_topics_only() -> None:
+    config = AppConfig(device_id="workstation", publish_location=False)
+
+    messages = legacy_0_1_discovery_cleanup_messages(config)
+    topics = {message.topic for message in messages}
+
+    assert "homeassistant/sensor/workstation_power/config" in topics
+    assert "homeassistant/device_tracker/workstation_location/config" in topics
+    assert "homeassistant/sensor/workstation_cpu_temperature/config" not in topics
+    assert all("/workstation_" in message.topic for message in messages)
+    assert all(message.payload == "" and message.retain for message in messages)
 
 
 def test_discovery_messages_define_location_entities_when_location_is_enabled() -> None:

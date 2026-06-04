@@ -22,7 +22,7 @@ MARKDOWN_FILES := README.md CHANGELOG.md TODO.md AGENTS.md docs/*.md
 
 .DEFAULT_GOAL := help
 
-.PHONY: help check-deps check-cli-install-deps check-install-deps sync install install-cli install-dev install-link install-config install-wifi-helper check-wifi-helper uninstall-agent restart-agent agent-status uninstall lint test check run clean
+.PHONY: help check-deps check-cli-install-deps check-install-deps sync install install-macos install-linux-system install-cli install-dev install-link install-config install-wifi-helper check-wifi-helper uninstall-agent restart-agent agent-status uninstall lint test check run clean
 
 help: ## Show available targets
 	@awk 'BEGIN { FS = ":.*##" } /^[a-zA-Z_-]+:.*##/ { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -64,8 +64,18 @@ $(VENV)/bin/python: pyproject.toml
 
 sync: $(VENV)/bin/python ## Sync the project environment
 
-install: check-install-deps install-cli install-config install-wifi-helper ## Install the full user LaunchAgent
+install: ## Install the platform service
+	@case "$$(uname -s)" in \
+		Darwin) $(MAKE) install-macos ;; \
+		Linux) $(MAKE) install-linux-system ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac
+
+install-macos: check-install-deps install-cli install-config install-wifi-helper ## Install the full user LaunchAgent
 	@./scripts/install-launch-agent.sh
+
+install-linux-system: ## Install the Linux systemd service
+	@STANDALONE_PYTHON="$(STANDALONE_PYTHON)" ./scripts/install-systemd-service.sh
 
 install-cli: check-cli-install-deps ## Install the standalone user-facing CLI runtime
 	@mkdir -p "$(APP_HOME)"
@@ -101,16 +111,28 @@ install-wifi-helper: ## Install the macOS Wi-Fi SSID helper app
 check-wifi-helper: ## Build the macOS Wi-Fi SSID helper app for validation
 	@SWIFTC="$(SWIFTC)" ./scripts/build-wifi-helper.sh "$(abspath .build/check/HaMqttAgentWifiHelper.app)"
 
-uninstall-agent: ## Stop and remove the macOS LaunchAgent
-	@./scripts/uninstall-launch-agent.sh
+uninstall-agent: ## Stop and remove the platform service
+	@case "$$(uname -s)" in \
+		Darwin) ./scripts/uninstall-launch-agent.sh ;; \
+		Linux) ./scripts/uninstall-systemd-service.sh ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac
 
 restart-agent: ## Restart the already installed macOS LaunchAgent
-	@launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
+	@case "$$(uname -s)" in \
+		Darwin) launchctl kickstart -k "gui/$$(id -u)/com.marcomc.ha-mqtt-agent" ;; \
+		Linux) if [ "$$(id -u)" -eq 0 ]; then systemctl restart ha-mqtt-agent; else sudo systemctl restart ha-mqtt-agent; fi ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac
 
-agent-status: ## Show the macOS LaunchAgent status
-	@launchctl print "gui/$$(id -u)/com.marcomc.ha-mqtt-agent"
+agent-status: ## Show the platform service status
+	@case "$$(uname -s)" in \
+		Darwin) launchctl print "gui/$$(id -u)/com.marcomc.ha-mqtt-agent" ;; \
+		Linux) systemctl status ha-mqtt-agent ;; \
+		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
+	esac
 
-uninstall: uninstall-agent ## Stop the LaunchAgent and remove the standalone runtime
+uninstall: uninstall-agent ## Stop the platform service and remove the standalone runtime
 	@rm -f "$(INSTALL_PATH)"
 	@rm -rf "$(APP_HOME)"
 	@echo "Removed $(INSTALL_PATH)"
