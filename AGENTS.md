@@ -61,6 +61,10 @@ Expected checks:
 - Keep install-created config templates inert for opt-in telemetry: placeholder
   SSIDs, CIDRs, gateways, client IDs, and location settings must not enable
   user-specific behavior until the user edits them.
+- When installer-created configs include local host identity, network facts, or
+  MQTT settings, write them atomically with restrictive permissions. User-scoped
+  configs should be `0600`; Linux systemd configs may be installed as
+  root-owned `0640` for the service group.
 - When adding helper app modes, keep normal telemetry sampling on non-interactive
   read paths. Reserve prompts, permission requests, and app activation for
   explicit CLI commands, and test the helper argv for both paths.

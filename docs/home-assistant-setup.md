@@ -93,9 +93,11 @@ Linux/systemd:
 sudoedit /etc/ha-mqtt-agent/config.toml
 ```
 
-Set a stable device identity. The `device_id` becomes part of MQTT topics and
-entity IDs, so do not rename it casually after Home Assistant has discovered the
-device.
+Review the generated stable device identity before the first publish. The
+installer pre-fills `device_id`, `device_name`, `mqtt_client_id`, and readable
+home-network match values from the local host. The `device_id` becomes part of
+MQTT topics and entity IDs, so do not rename it casually after Home Assistant
+has discovered the device.
 
 ```toml
 mqtt_host = "mqtt.example.local"
@@ -105,6 +107,7 @@ topic_prefix = "ha_mqtt_agent"
 
 device_id = "workstation"
 device_name = "Workstation"
+mqtt_client_id = "ha-mqtt-agent-workstation"
 
 sample_interval_seconds = 5
 expire_after_seconds = 15

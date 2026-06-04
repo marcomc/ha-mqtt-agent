@@ -12,15 +12,20 @@
 
 ## Installer Shape
 
-`scripts/install.sh` is the user-facing entrypoint for a new host. It delegates
-to the macOS LaunchAgent installer on Darwin and the Linux systemd installer on
-Linux.
+`make install` is the user-facing entrypoint for a new host. It delegates to
+the macOS LaunchAgent installer on Darwin and the Linux systemd installer on
+Linux. `scripts/install.sh` remains a wrapper for Linux-specific installer
+flags.
 
 The `Makefile` remains the durable automation API for install, restart, status,
 uninstall, development checks, and tests. macOS keeps the per-user LaunchAgent
 flow. Linux installs a system service with `/etc/ha-mqtt-agent/config.toml`,
 `/var/lib/ha-mqtt-agent/state.json`, and the unprivileged `ha-mqtt-agent`
 runtime user.
+
+First installs render config files from the inert example plus local readable
+facts: hostname-derived identity, MQTT client ID, and current SSID, BSSID, IPv4
+CIDR, gateway, and gateway MAC where available. Existing configs are preserved.
 
 ## Included Defaults
 

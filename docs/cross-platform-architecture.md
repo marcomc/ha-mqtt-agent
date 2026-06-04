@@ -195,6 +195,19 @@ macOS default install:
 - Use `~/.local/state/ha-mqtt-agent/state.json`.
 - Keep the Wi-Fi helper permission flow user-scoped.
 
+When a config file does not exist, installers render it from the inert example
+plus local readable facts:
+
+- `device_id` from the short hostname, normalized for MQTT topics.
+- `device_name` from the short hostname.
+- `mqtt_client_id` from the resolved runtime client ID for that device.
+- Home-network match lists from the current SSID, BSSID, IPv4 CIDR, default
+  gateway, and gateway MAC where readable.
+
+This detection is read-only and best effort. Existing configs are not
+overwritten, unsupported values remain empty, and installers must not synthesize
+network facts.
+
 The installer is interactive by default. It may install optional packages only after explicit confirmation.
 
 Non-interactive install should be supported:
