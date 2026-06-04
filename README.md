@@ -146,12 +146,12 @@ Clone the repository on the host you want to publish, then run the installer:
 ```bash
 git clone https://github.com/marcomc/ha-mqtt-agent.git
 cd ha-mqtt-agent
-./scripts/install.sh
+make install
 ```
 
-The script is a user-friendly wrapper around the platform install path. On
-macOS it starts the per-user LaunchAgent. On Linux it installs a systemd
-service running as the unprivileged `ha-mqtt-agent` user.
+The Make target dispatches to the platform install path. On macOS it starts the
+per-user LaunchAgent. On Linux it installs a systemd service running as the
+unprivileged `ha-mqtt-agent` user.
 
 This install path does not require activating `.venv`; the Linux installer
 creates its own standalone runtime under `/opt/ha-mqtt-agent/venv`.
@@ -199,7 +199,7 @@ non-developer users.
 
 ### macOS Source Install
 
-`./scripts/install.sh` and `make install` expect local build tools:
+`make install` expects local build tools:
 
 - Python `3.11` or newer for the packaged CLI runtime. The installer
   auto-detects a compatible `python3.14`, `python3.13`, `python3.12`,
@@ -224,7 +224,7 @@ xcode-select --install
 After installing the command line tools, rerun:
 
 ```bash
-./scripts/install.sh
+make install
 ```
 
 If more than one Python is installed, you can still force the standalone runtime
@@ -245,7 +245,7 @@ The backlog item is tracked as [HMA-009](TODO.md#hma-009-prebuilt-notarized-maco
 
 ### Linux System Install
 
-On Linux, `./scripts/install.sh` and `make install` install:
+On Linux, `make install` installs:
 
 - a standalone virtual environment in `/opt/ha-mqtt-agent/venv`
 - a symlink at `/usr/local/bin/ha-mqtt-agent`
@@ -264,6 +264,7 @@ Optional sensor packages are consent-based:
 ./scripts/install.sh --non-interactive --optional-packages iw,lm-sensors,upower
 ```
 
+Use `scripts/install.sh` when you need to pass Linux installer flags directly.
 Known optional packages are `iw`, `lm-sensors`, and `upower`. Unsupported
 package managers print the package recommendations instead of installing them.
 
@@ -331,9 +332,9 @@ Start from the example file in this repository:
 - [config.toml.example](config.toml.example)
 - [config.schema.json](config.schema.json)
 
-The repository example stays intentionally inert. `make install` and
-`./scripts/install.sh` render a host-aware first config from that example and
-leave any existing config untouched.
+The repository example stays intentionally inert. `make install` renders a
+host-aware first config from that example and leaves any existing config
+untouched.
 
 Example:
 

@@ -12,9 +12,10 @@
 
 ## Installer Shape
 
-`scripts/install.sh` is the user-facing entrypoint for a new host. It delegates
-to the macOS LaunchAgent installer on Darwin and the Linux systemd installer on
-Linux.
+`make install` is the user-facing entrypoint for a new host. It delegates to
+the macOS LaunchAgent installer on Darwin and the Linux systemd installer on
+Linux. `scripts/install.sh` remains a wrapper for Linux-specific installer
+flags.
 
 The `Makefile` remains the durable automation API for install, restart, status,
 uninstall, development checks, and tests. macOS keeps the per-user LaunchAgent
