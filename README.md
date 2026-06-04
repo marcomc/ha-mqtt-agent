@@ -156,6 +156,11 @@ service running as the unprivileged `ha-mqtt-agent` user.
 This install path does not require activating `.venv`; the Linux installer
 creates its own standalone runtime under `/opt/ha-mqtt-agent/venv`.
 
+On first install, the created config file is prefilled with a hostname-derived
+`device_id`, `device_name`, explicit `mqtt_client_id`, and any currently
+readable SSID, BSSID, IPv4 CIDR, default gateway, and gateway MAC. Existing
+config files are not overwritten.
+
 Edit the MQTT and device settings.
 
 macOS:
@@ -174,8 +179,6 @@ At minimum, set:
 
 ```toml
 mqtt_host = "mqtt.example.local"
-device_id = "workstation"
-device_name = "Workstation"
 ```
 
 Then restart the service:
@@ -283,7 +286,7 @@ On macOS, `make install`:
 - does not require `uv` at runtime
 - links the command to `~/.local/bin/ha-mqtt-agent`
 - installs a config template to `~/.config/ha-mqtt-agent/config.toml` if it
-  does not exist yet
+  does not exist yet, prefilled from local host and network facts where readable
 - installs and starts the per-user macOS LaunchAgent
 
 On Linux, `make install`:
@@ -293,6 +296,7 @@ On Linux, `make install`:
 - installs the packaged CLI into that standalone runtime
 - links the command to `/usr/local/bin/ha-mqtt-agent`
 - installs a config template to `/etc/ha-mqtt-agent/config.toml` if missing
+  with local host and network defaults where readable
 - creates `/var/lib/ha-mqtt-agent` for state owned by the service user
 - installs and starts the systemd service
 
@@ -326,6 +330,10 @@ Start from the example file in this repository:
 
 - [config.toml.example](config.toml.example)
 - [config.schema.json](config.schema.json)
+
+The repository example stays intentionally inert. `make install` and
+`./scripts/install.sh` render a host-aware first config from that example and
+leave any existing config untouched.
 
 Example:
 

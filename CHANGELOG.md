@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1] - 2026-06-04
+
+### Added in 0.2.1
+
+- Installers now preconfigure newly created config files with a hostname-based
+  `device_id`, `device_name`, explicit `mqtt_client_id`, and readable current
+  home-network match values.
+
+### Changed in 0.2.1
+
+- Linux systemd installs still preserve existing configs, but first installs
+  now render `/etc/ha-mqtt-agent/config.toml` from local host and network
+  facts instead of copying the inert example verbatim.
+- macOS installs use the same host-aware config renderer for
+  `~/.config/ha-mqtt-agent/config.toml` while preserving existing LaunchAgent
+  behavior.
+
 ## [0.2.0] - 2026-06-03
 
 ### Added in 0.2.0

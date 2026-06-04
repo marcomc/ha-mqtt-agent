@@ -207,8 +207,10 @@ run_root ln -sf "${APP_VENV}/bin/ha-mqtt-agent" "${BINARY_PATH}"
 
 if [ ! -f "${CONFIG_PATH}" ]; then
   tmp_config=$(mktemp)
-  sed "s#^state_path = .*#state_path = \"${STATE_PATH}\"#" \
-    "${PROJECT_ROOT}/config.toml.example" >"${tmp_config}"
+  "${APP_PYTHON}" -m ha_mqtt_agent.installer render-config \
+    --template "${PROJECT_ROOT}/config.toml.example" \
+    --output "${tmp_config}" \
+    --state-path "${STATE_PATH}"
   run_root install -m 0640 -o root -g "${SERVICE_USER}" "${tmp_config}" "${CONFIG_PATH}"
   rm -f "${tmp_config}"
   echo "Installed config template to ${CONFIG_PATH}"

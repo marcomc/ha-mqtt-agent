@@ -22,6 +22,10 @@ flow. Linux installs a system service with `/etc/ha-mqtt-agent/config.toml`,
 `/var/lib/ha-mqtt-agent/state.json`, and the unprivileged `ha-mqtt-agent`
 runtime user.
 
+First installs render config files from the inert example plus local readable
+facts: hostname-derived identity, MQTT client ID, and current SSID, BSSID, IPv4
+CIDR, gateway, and gateway MAC where available. Existing configs are preserved.
+
 ## Included Defaults
 
 - `uv` for development environment and package management

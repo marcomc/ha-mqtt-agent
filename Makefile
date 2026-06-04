@@ -96,10 +96,19 @@ install-link: ## Link the standalone runtime CLI into ~/.local/bin
 	@ln -sf "$(APP_VENV)/bin/$(CLI_NAME)" "$(INSTALL_PATH)"
 	@echo "Installed $(CLI_NAME) -> $(INSTALL_PATH)"
 
-install-config: ## Install the example config file if missing
+install-config: ## Install a host-aware config file if missing
 	@mkdir -p "$(CONFIG_DIR)"
 	@if [ ! -f "$(CONFIG_PATH)" ]; then \
-		cp config.toml.example "$(CONFIG_PATH)"; \
+		if [ -x "$(APP_PYTHON)" ]; then \
+			config_python="$(APP_PYTHON)"; \
+		elif [ -x "$(VENV)/bin/python" ]; then \
+			config_python="$(VENV)/bin/python"; \
+		else \
+			config_python="$(STANDALONE_PYTHON)"; \
+		fi; \
+		PYTHONPATH="$(abspath src):$${PYTHONPATH:-}" "$${config_python}" -m ha_mqtt_agent.installer render-config \
+			--template config.toml.example \
+			--output "$(CONFIG_PATH)"; \
 		echo "Installed config template to $(CONFIG_PATH)"; \
 	else \
 		echo "Config already exists at $(CONFIG_PATH)"; \
