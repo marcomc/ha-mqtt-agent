@@ -18,6 +18,7 @@ from ha_mqtt_agent.installer import (
     optional_package_install_command,
     plan_linux_install,
     render_install_config,
+    write_install_config,
 )
 from ha_mqtt_agent.network import (
     ARP_PATH,
@@ -90,6 +91,15 @@ def test_makefile_install_config_uses_renderer_without_overwriting_existing_conf
     assert 'if [ ! -f "$(CONFIG_PATH)" ]; then' in makefile
 
 
+def test_makefile_macos_install_runs_install_steps_sequentially() -> None:
+    makefile = Path("Makefile").read_text(encoding="utf-8")
+
+    assert "install-macos: check-install-deps ## Install the full user LaunchAgent" in makefile
+    assert "$(MAKE) install-cli" in makefile
+    assert "$(MAKE) install-config" in makefile
+    assert "$(MAKE) install-wifi-helper" in makefile
+
+
 def test_makefile_linux_restart_agent_works_without_sudo_when_root() -> None:
     makefile = Path("Makefile").read_text(encoding="utf-8")
 
@@ -143,16 +153,16 @@ def test_optional_package_install_commands_are_package_manager_specific() -> Non
 
 def test_render_install_config_prefills_identity_network_and_state_path(tmp_path: Path) -> None:
     facts = InstallConfigFacts(
-        hostname="bmgateway",
-        device_id="bmgateway",
-        device_name="bmgateway",
-        mqtt_client_id="ha-mqtt-agent-bmgateway",
+        hostname="rpi",
+        device_id="rpi",
+        device_name="rpi",
+        mqtt_client_id="ha-mqtt-agent-rpi",
         network=InstallNetworkFacts(
-            home_ssids=("HAL9000",),
-            home_ipv4_cidrs=("192.168.1.0/24",),
-            home_gateways=("192.168.1.80",),
-            home_bssids=("3a:07:16:ea:96:40",),
-            home_gateway_macs=("94:83:c4:67:02:5e",),
+            home_ssids=("Home WiFi",),
+            home_ipv4_cidrs=("192.0.2.0/24",),
+            home_gateways=("192.0.2.1",),
+            home_bssids=("02:00:00:00:00:40",),
+            home_gateway_macs=("02:00:00:00:00:01",),
         ),
     )
     rendered = render_install_config(
@@ -165,16 +175,41 @@ def test_render_install_config_prefills_identity_network_and_state_path(tmp_path
 
     config = load_config(config_path)
 
-    assert config.device_id == "bmgateway"
-    assert config.device_name == "bmgateway"
-    assert config.mqtt_client_id == "ha-mqtt-agent-bmgateway"
-    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-bmgateway"
-    assert config.home_ssids == ("HAL9000",)
-    assert config.home_ipv4_cidrs == ("192.168.1.0/24",)
-    assert config.home_gateways == ("192.168.1.80",)
-    assert config.home_bssids == ("3a:07:16:ea:96:40",)
-    assert config.home_gateway_macs == ("94:83:c4:67:02:5e",)
+    assert config.device_id == "rpi"
+    assert config.device_name == "rpi"
+    assert config.mqtt_client_id == "ha-mqtt-agent-rpi"
+    assert config.resolved_mqtt_client_id == "ha-mqtt-agent-rpi"
+    assert config.home_ssids == ("Home WiFi",)
+    assert config.home_ipv4_cidrs == ("192.0.2.0/24",)
+    assert config.home_gateways == ("192.0.2.1",)
+    assert config.home_bssids == ("02:00:00:00:00:40",)
+    assert config.home_gateway_macs == ("02:00:00:00:00:01",)
     assert config.state_path == Path("/var/lib/ha-mqtt-agent/state.json")
+
+
+def test_write_install_config_uses_private_file_permissions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    template_path = tmp_path / "template.toml"
+    output_path = tmp_path / "config.toml"
+    template_path.write_text(
+        Path("config.toml.example").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "ha_mqtt_agent.installer.detect_install_config_facts",
+        lambda: InstallConfigFacts(
+            hostname="rpi",
+            device_id="rpi",
+            device_name="rpi",
+            mqtt_client_id="ha-mqtt-agent-rpi",
+        ),
+    )
+
+    write_install_config(template_path=template_path, output_path=output_path)
+
+    assert output_path.stat().st_mode & 0o777 == 0o600
 
 
 def test_detect_install_config_facts_reads_linux_host_network(tmp_path: Path) -> None:
@@ -185,16 +220,16 @@ def test_detect_install_config_facts_reads_linux_host_network(tmp_path: Path) ->
                     '[{"ifname":"lo","operstate":"UNKNOWN",'
                     '"addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},'
                     '{"ifname":"wlan0","operstate":"UP",'
-                    '"addr_info":[{"family":"inet","local":"192.168.1.63","prefixlen":24}]}]'
+                    '"addr_info":[{"family":"inet","local":"192.0.2.63","prefixlen":24}]}]'
                 ),
                 returncode=0,
             ),
             (IP_COMMAND, "-j", "route", "show", "default"): LinuxCommandResult(
-                stdout='[{"gateway":"192.168.1.80","dev":"wlan0"}]',
+                stdout='[{"gateway":"192.0.2.1","dev":"wlan0"}]',
                 returncode=0,
             ),
-            (IP_COMMAND, "neigh", "show", "192.168.1.80"): LinuxCommandResult(
-                stdout="192.168.1.80 dev wlan0 lladdr 94:83:c4:67:02:5e REACHABLE\n",
+            (IP_COMMAND, "neigh", "show", "192.0.2.1"): LinuxCommandResult(
+                stdout="192.0.2.1 dev wlan0 lladdr 02:00:00:00:00:01 REACHABLE\n",
                 returncode=0,
             ),
             (
@@ -204,7 +239,7 @@ def test_detect_install_config_facts_reads_linux_host_network(tmp_path: Path) ->
                 "DEVICE,TYPE,STATE,CONNECTION",
                 "dev",
                 "status",
-            ): LinuxCommandResult(stdout="wlan0:wifi:connected:HAL9000\n", returncode=0),
+            ): LinuxCommandResult(stdout="wlan0:wifi:connected:Home WiFi\n", returncode=0),
             (
                 NMCLI_COMMAND,
                 "-t",
@@ -216,7 +251,7 @@ def test_detect_install_config_facts_reads_linux_host_network(tmp_path: Path) ->
                 "ifname",
                 "wlan0",
             ): LinuxCommandResult(
-                stdout="yes:HAL9000:3a\\:07\\:16\\:ea\\:96\\:40:84\n",
+                stdout="yes:Home WiFi:02\\:00\\:00\\:00\\:00\\:40:84\n",
                 returncode=0,
             ),
         }
@@ -229,18 +264,18 @@ def test_detect_install_config_facts_reads_linux_host_network(tmp_path: Path) ->
 
     facts = detect_install_config_facts(
         system_name="Linux",
-        hostname="bmgateway.local",
+        hostname="rpi.local",
         linux_provider=provider,
     )
 
-    assert facts.device_id == "bmgateway"
-    assert facts.device_name == "bmgateway"
-    assert facts.mqtt_client_id == "ha-mqtt-agent-bmgateway"
-    assert facts.network.home_ssids == ("HAL9000",)
-    assert facts.network.home_bssids == ("3a:07:16:ea:96:40",)
-    assert facts.network.home_gateways == ("192.168.1.80",)
-    assert facts.network.home_gateway_macs == ("94:83:c4:67:02:5e",)
-    assert facts.network.home_ipv4_cidrs == ("192.168.1.0/24",)
+    assert facts.device_id == "rpi"
+    assert facts.device_name == "rpi"
+    assert facts.mqtt_client_id == "ha-mqtt-agent-rpi"
+    assert facts.network.home_ssids == ("Home WiFi",)
+    assert facts.network.home_bssids == ("02:00:00:00:00:40",)
+    assert facts.network.home_gateways == ("192.0.2.1",)
+    assert facts.network.home_gateway_macs == ("02:00:00:00:00:01",)
+    assert facts.network.home_ipv4_cidrs == ("192.0.2.0/24",)
 
 
 def test_detect_install_config_facts_reads_macos_host_network() -> None:

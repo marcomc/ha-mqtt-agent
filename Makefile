@@ -71,7 +71,10 @@ install: ## Install the platform service
 		*) echo "Unsupported platform: $$(uname -s)" >&2; exit 1 ;; \
 	esac
 
-install-macos: check-install-deps install-cli install-config install-wifi-helper ## Install the full user LaunchAgent
+install-macos: check-install-deps ## Install the full user LaunchAgent
+	@$(MAKE) install-cli
+	@$(MAKE) install-config
+	@$(MAKE) install-wifi-helper
 	@./scripts/install-launch-agent.sh
 
 install-linux-system: ## Install the Linux systemd service

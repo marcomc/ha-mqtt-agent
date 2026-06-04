@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import re
 import shutil
 import socket
 import subprocess
+import tempfile
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from ipaddress import ip_network
@@ -190,7 +192,7 @@ def write_install_config(
         state_path=state_path,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(rendered, encoding="utf-8")
+    _write_private_text(output_path, rendered)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -420,6 +422,29 @@ def _replace_toml_assignment(text: str, *, key: str, value: str) -> str:
         return rendered
     suffix = "" if text.endswith("\n") else "\n"
     return f"{text}{suffix}{replacement}\n"
+
+
+def _write_private_text(path: Path, text: str) -> None:
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            dir=path.parent,
+            encoding="utf-8",
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            os.chmod(temporary_path, 0o600)
+            handle.write(text)
+        os.replace(temporary_path, path)
+        os.chmod(path, 0o600)
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
 
 
 def _toml_array(values: Sequence[str]) -> str:

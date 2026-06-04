@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `~/.config/ha-mqtt-agent/config.toml` while preserving existing LaunchAgent
   behavior.
 
+### Fixed in 0.2.1
+
+- Host-aware config rendering now writes generated configs atomically with
+  restrictive permissions before platform installers apply final ownership.
+- macOS installs now run CLI, config, Wi-Fi helper, and LaunchAgent steps
+  sequentially even under parallel `make`.
+
 ## [0.2.0] - 2026-06-03
 
 ### Added in 0.2.0
