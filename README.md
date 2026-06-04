@@ -123,10 +123,11 @@ It does not estimate power draw or synthesize an energy counter on Linux.
 Unsupported capabilities are omitted from MQTT discovery. Supported capabilities
 that fail during a sample remain discovered and report unavailable.
 
-For a quick source smoke test without installing a service:
+For a quick source smoke test without installing a service, use a temporary
+developer virtual environment:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/marcomc/ha-mqtt-agent.git
 cd ha-mqtt-agent
 python3 -m venv .venv
 . .venv/bin/activate
@@ -143,7 +144,7 @@ Use `ha-mqtt-agent doctor` before installing as a service.
 Clone the repository on the host you want to publish, then run the installer:
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/marcomc/ha-mqtt-agent.git
 cd ha-mqtt-agent
 ./scripts/install.sh
 ```
@@ -151,6 +152,9 @@ cd ha-mqtt-agent
 The script is a user-friendly wrapper around the platform install path. On
 macOS it starts the per-user LaunchAgent. On Linux it installs a systemd
 service running as the unprivileged `ha-mqtt-agent` user.
+
+This install path does not require activating `.venv`; the Linux installer
+creates its own standalone runtime under `/opt/ha-mqtt-agent/venv`.
 
 Edit the MQTT and device settings.
 
