@@ -69,6 +69,24 @@ def test_macos_provider_wraps_current_sensor_network_and_energy_payload(
     assert not config.state_path.exists()
 
 
+def test_macos_provider_excludes_raspberry_pi_firmware_capabilities() -> None:
+    supported = set(MacOSProvider().supported_capability_ids(AppConfig(ping_targets=())))
+
+    raspberry_pi_capabilities = {
+        "rpi_input_voltage",
+        "rpi_throttle_flags",
+        "rpi_under_voltage",
+        "rpi_frequency_capped",
+        "rpi_throttled",
+        "rpi_soft_temperature_limit",
+        "rpi_under_voltage_occurred",
+        "rpi_frequency_capped_occurred",
+        "rpi_throttled_occurred",
+        "rpi_soft_temperature_limit_occurred",
+    }
+    assert supported.isdisjoint(raspberry_pi_capabilities)
+
+
 def test_macos_provider_uses_network_snapshot_cache_between_samples(
     tmp_path: Path,
 ) -> None:
