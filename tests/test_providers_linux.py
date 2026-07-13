@@ -12,6 +12,7 @@ from ha_mqtt_agent.providers.linux import (
     NMCLI_COMMAND,
     PING_COMMAND,
     UPOWER_COMMAND,
+    VCGENCMD_COMMAND,
     LinuxCommandResult,
     LinuxProvider,
 )
@@ -468,6 +469,265 @@ def test_linux_provider_uses_nmcli_for_wifi_on_networkmanager_hosts(
     assert payload["wifi_bssid"] == "00:11:22:33:44:55"
     assert payload["wifi_signal_dbm"] == -64
     assert payload["wifi_signal_percent"] == 72
+
+
+def test_linux_provider_decodes_all_raspberry_pi_throttle_flags(tmp_path: Path) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 3 Model B Plus Rev 1.3\0")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0xf000f\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+
+    payload = provider.sample(
+        AppConfig(state_path=tmp_path / "state.json", ping_targets=()),
+        update_energy=False,
+    ).state_payload()
+
+    assert payload["rpi_throttle_flags"] == "0xf000f"
+    assert payload["rpi_under_voltage"] is True
+    assert payload["rpi_frequency_capped"] is True
+    assert payload["rpi_throttled"] is True
+    assert payload["rpi_soft_temperature_limit"] is True
+    assert payload["rpi_under_voltage_occurred"] is True
+    assert payload["rpi_frequency_capped_occurred"] is True
+    assert payload["rpi_throttled_occurred"] is True
+    assert payload["rpi_soft_temperature_limit_occurred"] is True
+
+
+def test_linux_provider_reads_pi5_ext5v_supply_voltage(tmp_path: Path) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 5 Model B Rev 1.0\0")
+    pmic_command = (VCGENCMD_COMMAND, "pmic_read_adc", "EXT5V_V")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0x0\n",
+                returncode=0,
+            ),
+            pmic_command: LinuxCommandResult(
+                stdout="EXT5V_V volt(24)=5.11746000V\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+
+    assert "rpi_input_voltage" in supported
+    assert payload["rpi_input_voltage_v"] == 5.117
+    assert pmic_command in runner.commands
+
+
+def test_linux_provider_keeps_pi5_input_voltage_discovered_when_read_fails(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 5 Model B Rev 1.0\0")
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner(
+            {
+                (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                    stdout="throttled=0x0\n",
+                    returncode=0,
+                ),
+                (VCGENCMD_COMMAND, "pmic_read_adc", "EXT5V_V"): LinuxCommandResult(
+                    stdout="error=unsupported\n",
+                    returncode=0,
+                ),
+            }
+        ),
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert "rpi_input_voltage" in supported
+    assert payload["rpi_input_voltage_v"] is None
+    assert availability["rpi_input_voltage"] == "offline"
+
+
+def test_linux_provider_omits_rpi_flags_when_tool_or_hardware_is_missing(tmp_path: Path) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+    tool_only_runner = FakeLinuxRunner({})
+    tool_only = LinuxProvider(
+        root=tmp_path,
+        command_runner=tool_only_runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+
+    assert "rpi_throttle_flags" not in tool_only.supported_capability_ids(config)
+    assert (VCGENCMD_COMMAND, "get_throttled") not in tool_only_runner.commands
+
+    _write(tmp_path / "proc/device-tree/compatible", "raspberrypi,5-model-b\0brcm,bcm2712\0")
+    hardware_only = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner({}),
+        available_commands=frozenset(),
+    )
+
+    assert "rpi_throttle_flags" not in hardware_only.supported_capability_ids(config)
+    assert "rpi_input_voltage" not in hardware_only.supported_capability_ids(config)
+
+
+def test_linux_provider_interprets_0x50000_as_sticky_history_only(tmp_path: Path) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 4 Model B Rev 1.5\0")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0x50000\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+
+    payload = provider.sample(
+        AppConfig(state_path=tmp_path / "state.json", ping_targets=()),
+        update_energy=False,
+    ).state_payload()
+
+    assert payload["rpi_under_voltage"] is False
+    assert payload["rpi_throttled"] is False
+    assert payload["rpi_under_voltage_occurred"] is True
+    assert payload["rpi_throttled_occurred"] is True
+
+
+def test_linux_provider_omits_unsupported_soft_temperature_entities(tmp_path: Path) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 4 Model B Rev 1.5\0")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0x80008\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+
+    assert "rpi_throttle_flags" in supported
+    assert "rpi_soft_temperature_limit" not in supported
+    assert "rpi_soft_temperature_limit_occurred" not in supported
+    assert "rpi_input_voltage" not in supported
+    assert payload["rpi_throttle_flags"] == "0x80008"
+    assert "rpi_soft_temperature_limit" not in payload
+    assert (VCGENCMD_COMMAND, "pmic_read_adc", "EXT5V_V") not in runner.commands
+
+
+def test_linux_provider_omits_unsupported_under_voltage_entities_on_pi_zero(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi Zero 2 W Rev 1.0\0")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0x40004\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+
+    assert "rpi_throttle_flags" in supported
+    assert "rpi_throttled" in supported
+    assert "rpi_under_voltage" not in supported
+    assert "rpi_under_voltage_occurred" not in supported
+    assert payload["rpi_throttled"] is True
+    assert "rpi_under_voltage" not in payload
+
+
+def test_linux_provider_omits_unsupported_under_voltage_entities_on_original_pi(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi Model B Rev 2.0\0")
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner(
+            {
+                (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                    stdout="throttled=0x40004\n",
+                    returncode=0,
+                ),
+            }
+        ),
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+
+    assert "rpi_throttle_flags" in supported
+    assert "rpi_throttled" in supported
+    assert "rpi_under_voltage" not in supported
+    assert "rpi_under_voltage_occurred" not in supported
+    assert payload["rpi_throttled"] is True
+    assert "rpi_under_voltage" not in payload
+
+
+def test_linux_provider_keeps_rpi_entities_discovered_when_firmware_read_fails(
+    tmp_path: Path,
+) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 4 Model B Rev 1.5\0")
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner(
+            {
+                (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                    stdout="vc_gencmd_read_response returned -1\n",
+                    returncode=1,
+                ),
+            }
+        ),
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+
+    payload = provider.sample(
+        AppConfig(state_path=tmp_path / "state.json", ping_targets=()),
+        update_energy=True,
+    ).state_payload()
+    availability = cast(dict[str, str], payload["availability"])
+
+    assert payload["rpi_throttle_flags"] is None
+    assert availability["rpi_throttle_flags"] == "offline"
+    assert availability["rpi_under_voltage"] == "offline"
 
 
 def _write(path: Path, text: str) -> None:

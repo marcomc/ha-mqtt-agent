@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-07-13
+
+### Added
+
+- Added Raspberry Pi firmware health discovery for the raw `get_throttled`
+  word and all supported documented current and history flags.
+- Added Pi 5 input-voltage discovery from the PMIC `EXT5V_V` ADC reading.
+- Added Home Assistant alert guidance and a primary-source research note for
+  firmware semantics, model limits, and Apple Home interoperability.
+
+### Changed
+
+- Linux capability detection now requires both Raspberry Pi hardware and
+  `vcgencmd` before publishing firmware health entities, while original Model
+  A/B and Raspberry Pi Zero boards omit unsupported under-voltage entities and
+  only Pi 3A+/3B+ boards publish soft-temperature-limit entities. Pi 5 boards
+  additionally publish the supported PMIC input-voltage entity.
+- Linux system installs conditionally run the service with the existing
+  `video` group to access Raspberry Pi's firmware mailbox.
+
 ## [0.2.1] - 2026-06-04
 
 ### Added in 0.2.1

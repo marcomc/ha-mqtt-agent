@@ -70,6 +70,9 @@ flowchart LR
   status sensors where the active provider has real battery data.
 - Battery temperature, battery virtual temperature where available, CPU
   temperature on Linux where readable, and system uptime sensors.
+- Raspberry Pi firmware under-voltage, frequency-cap, throttling, and soft
+  temperature-limit status, including firmware history flags where supported.
+- Raspberry Pi 5 input supply voltage from the PMIC `EXT5V_V` ADC reading.
 - Wi-Fi SSID, Wi-Fi signal in `dBm`, and Wi-Fi signal as a percentage.
 - Wi-Fi BSSID, local IPv4 addresses, default gateway, gateway MAC, and a
   configurable home-network presence binary sensor.
@@ -118,6 +121,23 @@ Linux and Raspberry Pi OS are supported through the Linux provider and system
 uptime, network addresses, Wi-Fi, Ethernet, default gateway, gateway MAC,
 configured ping latency, CPU temperature where exposed by `/sys`, and battery
 facts where Linux power-supply data exists.
+
+On Raspberry Pi hardware with `vcgencmd`, the provider also publishes the raw
+`get_throttled` word and each supported documented current and history flag.
+Raspberry Pi Zero and original Model A/B boards publish the supported throttle
+and thermal flags, but omit under-voltage entities because those boards lack the
+low-voltage detector. Soft-temperature-limit entities are published only on Pi
+3A+/3B+, where that feature exists. The firmware word contains no event count
+or timestamp.
+On systems using `raspberrypi-hwmon`, the kernel can also clear the sticky bits
+between agent samples, so this periodic collector does not synthesize those
+values.
+
+`get_throttled` does not measure the input 5 V rail. On Pi 5, the provider also
+runs `vcgencmd pmic_read_adc EXT5V_V` and publishes the PMIC ADC supply-voltage
+measurement. This is a voltage reading, not a measurement of current or total
+power consumed by attached devices. See
+[Raspberry Pi Throttle Status Research](docs/raspberry-pi-throttle-status.md).
 
 It does not estimate power draw or synthesize an energy counter on Linux.
 Unsupported capabilities are omitted from MQTT discovery. Supported capabilities
@@ -254,7 +274,10 @@ On Linux, `make install` installs:
 - a system service named `ha-mqtt-agent`
 
 The service runs as the unprivileged `ha-mqtt-agent` user. Setup uses `sudo`
-when the installer is not already running as root.
+when the installer is not already running as root. On Raspberry Pi OS, the
+installer gives the service process the existing `video` group as a conditional
+supplementary group when `vcgencmd` is present, without changing persistent
+user membership.
 
 Optional sensor packages are consent-based:
 
@@ -555,6 +578,11 @@ with these entities:
 - Ethernet active count.
 - Ethernet active interfaces.
 - One ping latency sensor in `ms` for each configured `ping_targets` entry.
+- Raspberry Pi throttle flags as a raw hexadecimal diagnostic value.
+- Raspberry Pi current and firmware-history binary problem sensors for
+  under-voltage, frequency capping, throttling, and the soft temperature limit
+  where each capability is supported.
+- Raspberry Pi 5 input voltage in `V` from the PMIC `EXT5V_V` ADC.
 
 The energy entity is the one to add under Home Assistant's Energy dashboard.
 Home Assistant long-term statistics are fed by the `total_increasing` kWh
@@ -572,6 +600,13 @@ CPU, GPU, memory, SSD, palm-rest, and fan sensors are not exposed by the
 default LaunchAgent because macOS does not provide those detailed thermal
 channels to this app without a privileged sensor source. The default macOS
 publisher stays user-scoped and does not require root.
+
+Configure Raspberry Pi under-voltage notifications in Home Assistant, where an
+automation can trigger on the current problem sensor. Apple Home is not the
+preferred alert path:
+Home Assistant's HomeKit Bridge does not map the `problem` binary-sensor class
+natively. See
+[Home Assistant Setup](docs/home-assistant-setup.md#raspberry-pi-under-voltage-alerts).
 
 For the complete Home Assistant setup path, including MQTT discovery checks and
 Energy dashboard configuration, see
@@ -654,6 +689,30 @@ nc -vz mqtt.example.local 1883
 If Home Assistant still shows stale values, confirm the discovery payload has
 the expected `expire_after` value and restart the service after config
 changes.
+
+On Raspberry Pi, verify the firmware value directly when throttle entities are
+missing or unavailable:
+
+```bash
+vcgencmd get_throttled
+```
+
+`throttled=0x0` means no flags are set in that firmware snapshot. `0x50000`
+means the under-voltage and throttling history bits are set; it does not mean
+either condition is currently active. Those bits normally cover the period
+since power-on, but a firmware consumer such as `raspberrypi-hwmon` can clear
+them earlier.
+
+On Pi 5, verify the input-voltage ADC and preview the MQTT state before
+enabling the background service:
+
+```bash
+vcgencmd pmic_read_adc EXT5V_V
+ha-mqtt-agent publish-once --dry-run | grep rpi_input_voltage
+```
+
+A supported response resembles `EXT5V_V volt(24)=5.11746000V`. The Home
+Assistant entity reports the value in volts with millivolt precision.
 
 If Home Assistant shows the device as unavailable and the service is still
 running, check whether the log contains MQTT reachability errors such as

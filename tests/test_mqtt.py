@@ -103,6 +103,41 @@ def test_discovery_messages_define_network_and_ping_sensors() -> None:
     assert ping["value_template"] == "{{ value_json.ping_cloudflare_dns_ms }}"
 
 
+def test_discovery_messages_define_raspberry_pi_firmware_health_entities() -> None:
+    config = AppConfig(device_id="rpi", device_name="Raspberry Pi")
+    messages = {
+        message.topic: json.loads(message.payload)
+        for message in discovery_messages(
+            config,
+            capability_ids=(
+                "rpi_throttle_flags",
+                "rpi_under_voltage",
+                "rpi_under_voltage_occurred",
+                "rpi_input_voltage",
+            ),
+        )
+    }
+
+    raw_flags = messages["homeassistant/sensor/rpi_rpi_throttle_flags/config"]
+    assert raw_flags["entity_category"] == "diagnostic"
+    assert raw_flags["value_template"] == "{{ value_json.rpi_throttle_flags }}"
+
+    under_voltage = messages["homeassistant/binary_sensor/rpi_rpi_under_voltage/config"]
+    assert under_voltage["device_class"] == "problem"
+    assert under_voltage["entity_category"] == "diagnostic"
+    assert under_voltage["value_template"] == "{{ value_json.rpi_under_voltage | tojson }}"
+
+    occurred = messages["homeassistant/binary_sensor/rpi_rpi_under_voltage_occurred/config"]
+    assert occurred["device_class"] == "problem"
+
+    input_voltage = messages["homeassistant/sensor/rpi_rpi_input_voltage/config"]
+    assert input_voltage["device_class"] == "voltage"
+    assert input_voltage["state_class"] == "measurement"
+    assert input_voltage["unit_of_measurement"] == "V"
+    assert input_voltage["entity_category"] == "diagnostic"
+    assert input_voltage["value_template"] == "{{ value_json.rpi_input_voltage_v }}"
+
+
 def test_discovery_messages_skip_location_entities_when_location_is_disabled() -> None:
     config = AppConfig(device_id="workstation", publish_location=False)
     topics = {message.topic for message in discovery_messages(config)}

@@ -7,6 +7,8 @@
   discovery, and legacy cleanup.
 - [Home Assistant Setup](home-assistant-setup.md): configure MQTT discovery,
   confirm the host device, and add supported entities to dashboards.
+- [Raspberry Pi Throttle Status Research](raspberry-pi-throttle-status.md):
+  firmware flag semantics, platform limits, entity design, and alerting.
 - [Roadmap](roadmap.md): future command, security, provider, and release work
   linked to numbered backlog tickets in [TODO.md](../TODO.md).
 

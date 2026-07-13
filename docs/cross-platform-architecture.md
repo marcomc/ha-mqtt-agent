@@ -23,11 +23,11 @@
 `ha-mqtt-agent` should install and run on macOS and normal Linux hosts, including Raspberry Pi OS. It should detect the platform, service manager, tools, permissions, and readable sensors on the machine where it is running, then publish only real values that can actually be collected from that machine.
 
 This document describes the implemented cross-platform runtime and installer
-shape for `0.2.0`.
+shape.
 
 ## Implementation Status
 
-Implemented in `0.2.0`:
+Implemented:
 
 - Shared capability registry and normalized capability snapshots.
 - macOS provider wrapper around the existing telemetry readers.
@@ -41,6 +41,9 @@ Implemented in `0.2.0`:
 - `publish-once --dry-run` exact message rendering without MQTT publishes or
   state writes.
 - Explicit legacy MQTT discovery cleanup command.
+- Raspberry Pi `get_throttled` capability detection, complete flag decoding,
+  and model-aware under-voltage support detection.
+- Raspberry Pi 5 `EXT5V_V` PMIC input-voltage sampling.
 
 ## Goals
 
@@ -116,6 +119,7 @@ Core capability groups:
 - `temperature`
 - `ping`
 - `location`
+- `rpi_firmware`
 
 Sensor IDs should be stable internal IDs. Display names can improve without changing MQTT unique IDs.
 
@@ -152,6 +156,18 @@ Multiple sources for the same sensor should be tried in priority order. For exam
 
 If a weaker source works but a better optional source is installable, `doctor` and the installer should report that as an improvement, not a requirement.
 
+The Raspberry Pi firmware group is hardware- and command-gated. Its registry
+covers all eight documented `get_throttled` flags, while runtime discovery
+omits under-voltage entities on original Model A/B and Zero boards and omits
+soft-temperature-limit entities except on Pi 3A+/3B+. A dependable event count
+and timestamp require a continuous kernel-event collector and are not
+synthesized from periodic samples.
+
+Pi 5 additionally exposes `rpi_input_voltage` from
+`vcgencmd pmic_read_adc EXT5V_V`. The capability is model- and command-gated;
+a failed or malformed firmware response leaves the discovered entity
+unavailable instead of inventing a value.
+
 ## Doctor Command
 
 `ha-mqtt-agent doctor` is the standard read-only assessment command.
@@ -187,6 +203,9 @@ Linux default install:
 - Use `/etc/ha-mqtt-agent/config.toml`.
 - Use `/var/lib/ha-mqtt-agent/state.json`.
 - Log through `journalctl -u ha-mqtt-agent`.
+- Run the service with the existing `video` group as a conditional
+  supplementary group only when `vcgencmd` is present, allowing read-only
+  Raspberry Pi firmware mailbox access.
 
 macOS default install:
 
@@ -433,6 +452,9 @@ Local automated tests:
 - Config loading and schema validation for new capability keys.
 - Doctor JSON output for macOS and Linux fixture inputs.
 - Linux provider parsing for `/proc`, `/sys`, `ip`, `iw`, `nmcli`, and fallback sources.
+- Raspberry Pi hardware/tool gating, all throttle bits, Zero-family capability
+  limits, original Model A/B limits, Pi 5 PMIC voltage parsing, and failed
+  reads.
 - macOS provider wrapping existing AppleSmartBattery and network helper behavior.
 - MQTT discovery generated only for available or previously known capabilities.
 - Per-entity availability payloads with `null` values.

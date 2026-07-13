@@ -84,6 +84,16 @@ def test_systemd_installer_renders_host_aware_config_template() -> None:
     assert '--state-path "${STATE_PATH}"' in script
 
 
+def test_systemd_installer_grants_vcgencmd_device_access_when_available() -> None:
+    script = Path("scripts/install-systemd-service.sh").read_text(encoding="utf-8")
+
+    assert "command -v vcgencmd >/dev/null 2>&1" in script
+    assert "getent group video >/dev/null 2>&1" in script
+    assert 'SUPPLEMENTARY_GROUPS_DIRECTIVE="SupplementaryGroups=video"' in script
+    assert "${SUPPLEMENTARY_GROUPS_DIRECTIVE}" in script
+    assert "usermod --append" not in script
+
+
 def test_makefile_install_config_uses_renderer_without_overwriting_existing_config() -> None:
     makefile = Path("Makefile").read_text(encoding="utf-8")
 

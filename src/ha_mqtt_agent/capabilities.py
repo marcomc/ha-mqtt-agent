@@ -19,6 +19,7 @@ CapabilityGroup = Literal[
     "temperature",
     "ping",
     "location",
+    "rpi_firmware",
 ]
 DiscoveryComponent = Literal["sensor", "binary_sensor", "device_tracker"]
 
@@ -310,11 +311,68 @@ def sensor_registry(config: AppConfig) -> tuple[CapabilityDefinition, ...]:
             device_class="presence",
             value_template="{{ value_json.home_network_present | tojson }}",
         ),
+        *_rpi_firmware_definitions(),
     ]
     if config.publish_location:
         definitions.extend(_location_definitions())
     definitions.extend(_ping_definitions(config))
     return tuple(definitions)
+
+
+def _rpi_firmware_definitions() -> list[CapabilityDefinition]:
+    definitions = [
+        CapabilityDefinition(
+            id="rpi_input_voltage",
+            group="rpi_firmware",
+            name="Raspberry Pi input voltage",
+            payload_key="rpi_input_voltage_v",
+            value_template="{{ value_json.rpi_input_voltage_v }}",
+            device_class="voltage",
+            state_class="measurement",
+            unit="V",
+            entity_category="diagnostic",
+        ),
+        CapabilityDefinition(
+            id="rpi_throttle_flags",
+            group="rpi_firmware",
+            name="Raspberry Pi throttle flags",
+            payload_key="rpi_throttle_flags",
+            value_template="{{ value_json.rpi_throttle_flags }}",
+            entity_category="diagnostic",
+        ),
+    ]
+    definitions.extend(
+        CapabilityDefinition(
+            id=capability_id,
+            group="rpi_firmware",
+            component="binary_sensor",
+            name=name,
+            payload_key=capability_id,
+            device_class="problem",
+            value_template=f"{{{{ value_json.{capability_id} | tojson }}}}",
+            entity_category="diagnostic",
+        )
+        for capability_id, name in (
+            ("rpi_under_voltage", "Raspberry Pi under-voltage"),
+            ("rpi_frequency_capped", "Raspberry Pi frequency capped"),
+            ("rpi_throttled", "Raspberry Pi throttled"),
+            ("rpi_soft_temperature_limit", "Raspberry Pi soft temperature limit"),
+            (
+                "rpi_under_voltage_occurred",
+                "Raspberry Pi under-voltage history flag",
+            ),
+            (
+                "rpi_frequency_capped_occurred",
+                "Raspberry Pi frequency capping history flag",
+            ),
+            ("rpi_throttled_occurred", "Raspberry Pi throttling history flag"),
+            (
+                "rpi_soft_temperature_limit_occurred",
+                "Raspberry Pi soft temperature limit history flag",
+            ),
+        )
+    )
+    return definitions
 
 
 def _location_definitions() -> list[CapabilityDefinition]:
