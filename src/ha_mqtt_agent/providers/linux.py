@@ -298,11 +298,17 @@ class LinuxProvider:
         return False
 
     def _rpi_ext5v_supported(self) -> bool:
-        return any(
-            re.search(r"raspberry pi 5(?:\s|$)", value.casefold())
-            or "raspberrypi,5-" in value.casefold()
-            for value in self._rpi_device_tree_values()
-        )
+        for value in self._rpi_device_tree_values():
+            normalized = value.casefold().replace("\0", "\n")
+            if re.search(r"raspberry pi (?:5|500\+?)(?:\s|$)", normalized):
+                return True
+            compatible = normalized.splitlines()
+            if any(
+                item == "raspberrypi,500" or item.startswith("raspberrypi,5-")
+                for item in compatible
+            ):
+                return True
+        return False
 
     def _rpi_input_voltage_v(self) -> float | None:
         result = self._run(

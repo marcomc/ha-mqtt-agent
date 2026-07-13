@@ -533,6 +533,51 @@ def test_linux_provider_reads_pi5_ext5v_supply_voltage(tmp_path: Path) -> None:
     assert pmic_command in runner.commands
 
 
+def test_linux_provider_reads_pi500_ext5v_supply_voltage(tmp_path: Path) -> None:
+    _write(tmp_path / "proc/device-tree/model", "Raspberry Pi 500\0")
+    pmic_command = (VCGENCMD_COMMAND, "pmic_read_adc", "EXT5V_V")
+    runner = FakeLinuxRunner(
+        {
+            (VCGENCMD_COMMAND, "get_throttled"): LinuxCommandResult(
+                stdout="throttled=0x0\n",
+                returncode=0,
+            ),
+            pmic_command: LinuxCommandResult(
+                stdout="EXT5V_V volt(24)=5.11746000V\n",
+                returncode=0,
+            ),
+        }
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=runner,
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    supported = provider.supported_capability_ids(config)
+    payload = provider.sample(config, update_energy=False).state_payload()
+
+    assert "rpi_input_voltage" in supported
+    assert payload["rpi_input_voltage_v"] == 5.117
+    assert pmic_command in runner.commands
+
+
+def test_linux_provider_detects_pi500_ext5v_from_compatible(tmp_path: Path) -> None:
+    _write(
+        tmp_path / "proc/device-tree/compatible",
+        "raspberrypi,500\0brcm,bcm2712\0",
+    )
+    provider = LinuxProvider(
+        root=tmp_path,
+        command_runner=FakeLinuxRunner({}),
+        available_commands=frozenset({VCGENCMD_COMMAND}),
+    )
+    config = AppConfig(state_path=tmp_path / "state.json", ping_targets=())
+
+    assert "rpi_input_voltage" in provider.supported_capability_ids(config)
+
+
 def test_linux_provider_keeps_pi5_input_voltage_discovered_when_read_fails(
     tmp_path: Path,
 ) -> None:

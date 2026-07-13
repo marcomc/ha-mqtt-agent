@@ -4,8 +4,8 @@
 
 Add Raspberry Pi firmware health as a capability-gated Linux provider feature.
 Publish the raw word plus separate current and history binary sensors through
-MQTT discovery. On Pi 5, also publish the PMIC `EXT5V_V` ADC measurement. Keep
-alert policy in Home Assistant.
+MQTT discovery. On Raspberry Pi 5-family hardware, also publish the PMIC
+`EXT5V_V` ADC measurement. Keep alert policy in Home Assistant.
 
 Do not treat the word as a voltage measurement or promise an exact event count
 or timestamp. Those values are not present in the firmware response.
@@ -93,14 +93,14 @@ the existing host device identity and be diagnostic entities.
 | 1 | Current/history cap binary sensors | Bits 1 and 17, `problem` |
 | 1 | Current/history throttle binary sensors | Bits 2 and 18, `problem` |
 | 1 | Current/history soft-limit binary sensors | Bits 3 and 19, `problem` |
-| 1 | Pi 5 input-voltage sensor | PMIC `EXT5V_V`, volts |
+| 1 | Raspberry Pi 5-family input-voltage sensor | PMIC `EXT5V_V`, volts |
 | Deferred | Observed event count | Needs continuous kernel-event capture |
 | Deferred | Latest detection timestamp | Needs continuous kernel-event capture |
 | Deferred | Stateless under-voltage event | Needs continuous kernel-event capture |
 
 The priority 1 flags come from one `get_throttled` firmware sample. The raw word
 makes unexpected combinations diagnosable without collapsing distinct causes;
-the Pi 5 voltage is a separate direct PMIC ADC sample.
+the Raspberry Pi 5-family voltage is a separate direct PMIC ADC sample.
 
 The deferred set requires explicit semantics:
 
@@ -147,11 +147,12 @@ targets are internal core and SDRAM rails, not the input 5 V rail
 The broader statement that every Pi needs an external ADC for input voltage is
 not universal. Current Raspberry Pi documentation says supported PMIC ADCs can
 report `EXT5V_V` through `vcgencmd pmic_read_adc`
-[in the power-supply documentation][rpi-pmic-adc]. The implemented Pi 5
-collector runs `vcgencmd pmic_read_adc EXT5V_V`, accepts a response such as
+[in the power-supply documentation][rpi-pmic-adc]. The implemented Raspberry Pi
+5-family collector, including Raspberry Pi 500 device-tree identifiers, runs
+`vcgencmd pmic_read_adc EXT5V_V`, accepts a response such as
 `EXT5V_V volt(24)=5.11746000V`, and publishes the value in volts with millivolt
-precision. Invalid reads report unavailable. Devices without that PMIC exposure
-still require external measurement hardware for actual rail voltage.
+precision. Invalid reads report unavailable. Devices without that PMIC
+exposure still require external measurement hardware for actual rail voltage.
 
 The ADC measures supply voltage. It does not provide the current or total power
 consumed by USB devices or other hardware connected directly to the 5 V rail.

@@ -72,7 +72,8 @@ flowchart LR
   temperature on Linux where readable, and system uptime sensors.
 - Raspberry Pi firmware under-voltage, frequency-cap, throttling, and soft
   temperature-limit status, including firmware history flags where supported.
-- Raspberry Pi 5 input supply voltage from the PMIC `EXT5V_V` ADC reading.
+- Raspberry Pi 5-family input supply voltage from the PMIC `EXT5V_V` ADC
+  reading, including Raspberry Pi 500 and 500+.
 - Wi-Fi SSID, Wi-Fi signal in `dBm`, and Wi-Fi signal as a percentage.
 - Wi-Fi BSSID, local IPv4 addresses, default gateway, gateway MAC, and a
   configurable home-network presence binary sensor.
@@ -133,8 +134,9 @@ On systems using `raspberrypi-hwmon`, the kernel can also clear the sticky bits
 between agent samples, so this periodic collector does not synthesize those
 values.
 
-`get_throttled` does not measure the input 5 V rail. On Pi 5, the provider also
-runs `vcgencmd pmic_read_adc EXT5V_V` and publishes the PMIC ADC supply-voltage
+`get_throttled` does not measure the input 5 V rail. On Raspberry Pi 5-family
+hardware, including Raspberry Pi 500 and 500+, the provider also runs
+`vcgencmd pmic_read_adc EXT5V_V` and publishes the PMIC ADC supply-voltage
 measurement. This is a voltage reading, not a measurement of current or total
 power consumed by attached devices. See
 [Raspberry Pi Throttle Status Research](docs/raspberry-pi-throttle-status.md).
@@ -582,7 +584,7 @@ with these entities:
 - Raspberry Pi current and firmware-history binary problem sensors for
   under-voltage, frequency capping, throttling, and the soft temperature limit
   where each capability is supported.
-- Raspberry Pi 5 input voltage in `V` from the PMIC `EXT5V_V` ADC.
+- Raspberry Pi 5-family input voltage in `V` from the PMIC `EXT5V_V` ADC.
 
 The energy entity is the one to add under Home Assistant's Energy dashboard.
 Home Assistant long-term statistics are fed by the `total_increasing` kWh
@@ -703,8 +705,8 @@ either condition is currently active. Those bits normally cover the period
 since power-on, but a firmware consumer such as `raspberrypi-hwmon` can clear
 them earlier.
 
-On Pi 5, verify the input-voltage ADC and preview the MQTT state before
-enabling the background service:
+On Raspberry Pi 5-family hardware, verify the input-voltage ADC and preview the
+MQTT state before enabling the background service:
 
 ```bash
 vcgencmd pmic_read_adc EXT5V_V

@@ -43,7 +43,7 @@ Implemented:
 - Explicit legacy MQTT discovery cleanup command.
 - Raspberry Pi `get_throttled` capability detection, complete flag decoding,
   and model-aware under-voltage support detection.
-- Raspberry Pi 5 `EXT5V_V` PMIC input-voltage sampling.
+- Raspberry Pi 5-family `EXT5V_V` PMIC input-voltage sampling.
 
 ## Goals
 
@@ -163,7 +163,7 @@ soft-temperature-limit entities except on Pi 3A+/3B+. A dependable event count
 and timestamp require a continuous kernel-event collector and are not
 synthesized from periodic samples.
 
-Pi 5 additionally exposes `rpi_input_voltage` from
+Raspberry Pi 5-family hardware additionally exposes `rpi_input_voltage` from
 `vcgencmd pmic_read_adc EXT5V_V`. The capability is model- and command-gated;
 a failed or malformed firmware response leaves the discovered entity
 unavailable instead of inventing a value.
@@ -453,8 +453,8 @@ Local automated tests:
 - Doctor JSON output for macOS and Linux fixture inputs.
 - Linux provider parsing for `/proc`, `/sys`, `ip`, `iw`, `nmcli`, and fallback sources.
 - Raspberry Pi hardware/tool gating, all throttle bits, Zero-family capability
-  limits, original Model A/B limits, Pi 5 PMIC voltage parsing, and failed
-  reads.
+  limits, original Model A/B limits, Raspberry Pi 5/500 PMIC voltage parsing,
+  and failed reads.
 - macOS provider wrapping existing AppleSmartBattery and network helper behavior.
 - MQTT discovery generated only for available or previously known capabilities.
 - Per-entity availability payloads with `null` values.
