@@ -25,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Linux system installs conditionally run the service with the existing
   `video` group to access Raspberry Pi's firmware mailbox and restart existing
   services so the updated group membership takes effect immediately.
+- Linux system installs accept `--no-start` to install runtime artifacts and
+  reload systemd without enabling or restarting the service, allowing config
+  management tools to apply final policy first.
 
 ## [0.2.1] - 2026-06-04
 
