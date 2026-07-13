@@ -23,7 +23,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   only Pi 3A+/3B+ boards publish soft-temperature-limit entities. Raspberry Pi
   5-family boards additionally publish the supported PMIC input-voltage entity.
 - Linux system installs conditionally run the service with the existing
-  `video` group to access Raspberry Pi's firmware mailbox.
+  `video` group to access Raspberry Pi's firmware mailbox and restart existing
+  services so the updated group membership takes effect immediately.
 
 ## [0.2.1] - 2026-06-04
 

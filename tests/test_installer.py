@@ -94,6 +94,17 @@ def test_systemd_installer_grants_vcgencmd_device_access_when_available() -> Non
     assert "usermod --append" not in script
 
 
+def test_systemd_installer_restarts_service_after_unit_update() -> None:
+    script = Path("scripts/install-systemd-service.sh").read_text(encoding="utf-8")
+
+    daemon_reload = "run_root systemctl daemon-reload"
+    enable = 'run_root systemctl enable "${SERVICE_NAME}"'
+    restart = 'run_root systemctl restart "${SERVICE_NAME}"'
+
+    assert "systemctl enable --now" not in script
+    assert script.index(daemon_reload) < script.index(enable) < script.index(restart)
+
+
 def test_makefile_install_config_uses_renderer_without_overwriting_existing_config() -> None:
     makefile = Path("Makefile").read_text(encoding="utf-8")
 

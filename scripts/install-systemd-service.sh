@@ -247,7 +247,8 @@ EOF
 run_root install -m 0644 -o root -g root "${tmp_service}" "${SERVICE_FILE}"
 rm -f "${tmp_service}"
 run_root systemctl daemon-reload
-run_root systemctl enable --now "${SERVICE_NAME}"
+run_root systemctl enable "${SERVICE_NAME}"
+run_root systemctl restart "${SERVICE_NAME}"
 
 echo "Installed and started ${SERVICE_NAME}"
 echo "Config: ${CONFIG_PATH}"
