@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -66,6 +67,31 @@ class FakeLinuxRunner:
         key = tuple(command)
         self.commands.append(key)
         return self.results.get(key)
+
+
+def test_systemd_installer_help_exposes_deferred_start_mode() -> None:
+    result = subprocess.run(
+        ["sh", "scripts/install-systemd-service.sh", "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "--no-start" in result.stdout
+
+
+def test_systemd_installer_deferred_start_guards_service_activation() -> None:
+    script = Path("scripts/install-systemd-service.sh").read_text(encoding="utf-8")
+
+    assert "--no-start)\n      START_SERVICE=0" in script
+    activation_guard = script.index('if [ "${START_SERVICE}" -eq 1 ]; then')
+    enable_service = script.index('systemctl enable "${SERVICE_NAME}"')
+    restart_service = script.index('systemctl restart "${SERVICE_NAME}"')
+    no_start_result = script.index(
+        'echo "Installed ${SERVICE_NAME} without enabling or restarting it"'
+    )
+
+    assert activation_guard < enable_service < restart_service < no_start_result
 
 
 def test_systemd_installer_interactive_prompt_is_not_captured_as_package() -> None:

@@ -233,6 +233,7 @@ Non-interactive install should be supported:
 
 ```bash
 ./scripts/install.sh --non-interactive
+./scripts/install.sh --non-interactive --no-start
 ./scripts/install.sh --non-interactive --enable-optional-sensors
 ./scripts/install.sh --non-interactive --optional-packages iw,lm-sensors,nut-client
 ```
@@ -240,6 +241,8 @@ Non-interactive install should be supported:
 Rules:
 
 - `--non-interactive` installs required pieces only.
+- `--no-start` installs the runtime and unit and reloads systemd without
+  enabling or restarting the service.
 - `--enable-optional-sensors` installs safe recommended optional packages for the detected platform.
 - `--optional-packages` installs exactly the listed known optional packages.
 - Unknown package names fail fast.

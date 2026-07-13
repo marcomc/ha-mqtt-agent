@@ -289,6 +289,17 @@ Optional sensor packages are consent-based:
 ./scripts/install.sh --non-interactive --optional-packages iw,lm-sensors,upower
 ```
 
+Automation can install or update all runtime artifacts without enabling or
+restarting the service:
+
+```bash
+./scripts/install.sh --non-interactive --no-start
+```
+
+Use `--no-start` when configuration management must apply the final config or
+service policy first. The installer still writes the unit and runs
+`systemctl daemon-reload`.
+
 Use `scripts/install.sh` when you need to pass Linux installer flags directly.
 Known optional packages are `iw`, `lm-sensors`, and `upower`. Unsupported
 package managers print the package recommendations instead of installing them.

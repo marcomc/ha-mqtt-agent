@@ -20,10 +20,12 @@ PROJECT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 NON_INTERACTIVE=0
 ENABLE_OPTIONAL_SENSORS=0
 OPTIONAL_PACKAGES=""
+START_SERVICE=1
 
 usage() {
   cat <<EOF
-usage: install-systemd-service.sh [--non-interactive] [--enable-optional-sensors] [--optional-packages LIST]
+usage: install-systemd-service.sh [--non-interactive] [--no-start]
+       [--enable-optional-sensors] [--optional-packages LIST]
 EOF
 }
 
@@ -31,6 +33,9 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --non-interactive)
       NON_INTERACTIVE=1
+      ;;
+    --no-start)
+      START_SERVICE=0
       ;;
     --enable-optional-sensors)
       ENABLE_OPTIONAL_SENSORS=1
@@ -247,10 +252,13 @@ EOF
 run_root install -m 0644 -o root -g root "${tmp_service}" "${SERVICE_FILE}"
 rm -f "${tmp_service}"
 run_root systemctl daemon-reload
-run_root systemctl enable "${SERVICE_NAME}"
-run_root systemctl restart "${SERVICE_NAME}"
-
-echo "Installed and started ${SERVICE_NAME}"
+if [ "${START_SERVICE}" -eq 1 ]; then
+  run_root systemctl enable "${SERVICE_NAME}"
+  run_root systemctl restart "${SERVICE_NAME}"
+  echo "Installed and started ${SERVICE_NAME}"
+else
+  echo "Installed ${SERVICE_NAME} without enabling or restarting it"
+fi
 echo "Config: ${CONFIG_PATH}"
 echo "State: ${STATE_PATH}"
 echo "Logs: journalctl -u ${SERVICE_NAME}"
