@@ -24,6 +24,30 @@ IW_COMMAND = "iw"
 NMCLI_COMMAND = "nmcli"
 PING_COMMAND = "ping"
 UPOWER_COMMAND = "upower"
+VCGENCMD_COMMAND = "vcgencmd"
+
+RPI_THROTTLE_FLAG_BITS = {
+    "rpi_under_voltage": 0,
+    "rpi_frequency_capped": 1,
+    "rpi_throttled": 2,
+    "rpi_soft_temperature_limit": 3,
+    "rpi_under_voltage_occurred": 16,
+    "rpi_frequency_capped_occurred": 17,
+    "rpi_throttled_occurred": 18,
+    "rpi_soft_temperature_limit_occurred": 19,
+}
+RPI_UNDER_VOLTAGE_CAPABILITY_IDS = (
+    "rpi_under_voltage",
+    "rpi_under_voltage_occurred",
+)
+RPI_SOFT_TEMPERATURE_CAPABILITY_IDS = (
+    "rpi_soft_temperature_limit",
+    "rpi_soft_temperature_limit_occurred",
+)
+RPI_THROTTLE_CAPABILITY_IDS = (
+    "rpi_throttle_flags",
+    *RPI_THROTTLE_FLAG_BITS,
+)
 
 LinuxCommandRunner = Callable[[Sequence[str], float], "LinuxCommandResult | None"]
 
@@ -122,6 +146,11 @@ class LinuxProvider:
         if self._cpu_temperature_source() is not None:
             supported.append("cpu_temperature")
 
+        if self._rpi_firmware_supported():
+            supported.extend(self._rpi_throttle_capability_ids())
+            if self._rpi_ext5v_supported():
+                supported.append("rpi_input_voltage")
+
         return tuple(dict.fromkeys(supported))
 
     def sample(
@@ -164,6 +193,20 @@ class LinuxProvider:
             if cpu_temperature is None:
                 errors["cpu_temperature"] = "CPU temperature unavailable"
 
+        if "rpi_throttle_flags" in supported:
+            payload.update(
+                self._rpi_throttle_payload(
+                    capability_ids=supported,
+                    errors=errors,
+                )
+            )
+
+        if "rpi_input_voltage" in supported:
+            input_voltage = self._rpi_input_voltage_v()
+            payload["rpi_input_voltage_v"] = _round_optional(input_voltage, 3)
+            if input_voltage is None:
+                errors["rpi_input_voltage"] = "Raspberry Pi input voltage unavailable"
+
         if payload_postprocessor is not None:
             payload_postprocessor(payload)
 
@@ -175,6 +218,125 @@ class LinuxProvider:
             unavailable_ids=tuple(errors),
             errors=errors,
         )
+
+    def _rpi_throttle_payload(
+        self,
+        *,
+        capability_ids: tuple[str, ...],
+        errors: dict[str, str],
+    ) -> dict[str, object]:
+        result = self._run(
+            [VCGENCMD_COMMAND, "get_throttled"],
+            LINUX_COMMAND_TIMEOUT_SECONDS,
+        )
+        flags = (
+            None
+            if result is None or result.returncode != 0
+            else _parse_throttle_flags(result.stdout)
+        )
+        supported = tuple(
+            capability_id
+            for capability_id in RPI_THROTTLE_CAPABILITY_IDS
+            if capability_id in capability_ids
+        )
+        if flags is None:
+            for capability_id in supported:
+                errors[capability_id] = "Raspberry Pi throttle flags unavailable"
+            return {capability_id: None for capability_id in supported}
+        payload: dict[str, object] = {
+            "rpi_throttle_flags": f"0x{flags:x}",
+            **{
+                capability_id: bool(flags & (1 << bit))
+                for capability_id, bit in RPI_THROTTLE_FLAG_BITS.items()
+                if capability_id in supported
+            },
+        }
+        return payload
+
+    def _rpi_firmware_supported(self) -> bool:
+        return self._is_raspberry_pi() and self._command_available(VCGENCMD_COMMAND)
+
+    def _rpi_throttle_capability_ids(self) -> tuple[str, ...]:
+        unsupported: set[str] = set()
+        if not self._rpi_under_voltage_supported():
+            unsupported.update(RPI_UNDER_VOLTAGE_CAPABILITY_IDS)
+        if not self._rpi_soft_temperature_limit_supported():
+            unsupported.update(RPI_SOFT_TEMPERATURE_CAPABILITY_IDS)
+        return tuple(
+            capability_id
+            for capability_id in RPI_THROTTLE_CAPABILITY_IDS
+            if capability_id not in unsupported
+        )
+
+    def _rpi_under_voltage_supported(self) -> bool:
+        for value in self._rpi_device_tree_values():
+            normalized = value.casefold()
+            if "raspberry pi zero" in normalized or "raspberrypi,model-zero" in normalized:
+                return False
+            if re.search(r"raspberry pi model [ab] rev", normalized):
+                return False
+            compatible = normalized.replace("\0", "\n").splitlines()
+            if any(item in {"raspberrypi,model-a", "raspberrypi,model-b"} for item in compatible):
+                return False
+        return True
+
+    def _rpi_soft_temperature_limit_supported(self) -> bool:
+        for value in self._rpi_device_tree_values():
+            normalized = value.casefold()
+            if re.search(r"raspberry pi 3 model [ab] plus", normalized):
+                return True
+            compatible = normalized.replace("\0", "\n").splitlines()
+            if any(
+                item
+                in {
+                    "raspberrypi,3-model-a-plus",
+                    "raspberrypi,3-model-b-plus",
+                }
+                for item in compatible
+            ):
+                return True
+        return False
+
+    def _rpi_ext5v_supported(self) -> bool:
+        for value in self._rpi_device_tree_values():
+            normalized = value.casefold().replace("\0", "\n")
+            if re.search(r"raspberry pi (?:5|500\+?)(?:\s|$)", normalized):
+                return True
+            compatible = normalized.splitlines()
+            if any(
+                item == "raspberrypi,500" or item.startswith("raspberrypi,5-")
+                for item in compatible
+            ):
+                return True
+        return False
+
+    def _rpi_input_voltage_v(self) -> float | None:
+        result = self._run(
+            [VCGENCMD_COMMAND, "pmic_read_adc", "EXT5V_V"],
+            LINUX_COMMAND_TIMEOUT_SECONDS,
+        )
+        if result is None or result.returncode != 0:
+            return None
+        return _parse_ext5v_voltage(result.stdout)
+
+    def _is_raspberry_pi(self) -> bool:
+        return any(
+            "raspberry pi" in value.casefold() or "raspberrypi," in value.casefold()
+            for value in self._rpi_device_tree_values()
+        )
+
+    def _rpi_device_tree_values(self) -> tuple[str, ...]:
+        values = []
+        for relative_path in (
+            "proc/device-tree/model",
+            "proc/device-tree/compatible",
+            "sys/firmware/devicetree/base/model",
+            "sys/firmware/devicetree/base/compatible",
+        ):
+            value = self._read_text(relative_path)
+            if value is not None:
+                values.append(value)
+        return tuple(values)
 
     def _read_network_sample(
         self,
@@ -1128,6 +1290,23 @@ def _capacity_percent(*, full: int | float | None, design: int | float | None) -
 
 def _parse_ping_latency_ms(output: str) -> float | None:
     match = re.search(r"time[=<]\s*([0-9.]+)\s*ms", output)
+    if match is None:
+        return None
+    return float(match.group(1))
+
+
+def _parse_throttle_flags(output: str) -> int | None:
+    match = re.fullmatch(r"\s*throttled=(0x[0-9a-fA-F]+)\s*", output)
+    if match is None:
+        return None
+    return int(match.group(1), 16)
+
+
+def _parse_ext5v_voltage(output: str) -> float | None:
+    match = re.fullmatch(
+        r"\s*EXT5V_V\s+volt\(\d+\)=([0-9]+(?:\.[0-9]+)?)V\s*",
+        output,
+    )
     if match is None:
         return None
     return float(match.group(1))

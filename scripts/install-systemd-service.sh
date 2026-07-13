@@ -197,6 +197,11 @@ if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
     "${SERVICE_USER}"
 fi
 
+SUPPLEMENTARY_GROUPS_DIRECTIVE=""
+if command -v vcgencmd >/dev/null 2>&1 && getent group video >/dev/null 2>&1; then
+  SUPPLEMENTARY_GROUPS_DIRECTIVE="SupplementaryGroups=video"
+fi
+
 run_root install -d -m 0755 "${APP_HOME}" "$(dirname -- "${BINARY_PATH}")" "${CONFIG_DIR}"
 run_root install -d -m 0750 -o "${SERVICE_USER}" -g "${SERVICE_USER}" "${STATE_DIR}"
 run_root rm -rf "${APP_VENV}"
@@ -229,6 +234,7 @@ After=network-online.target
 Type=simple
 User=${SERVICE_USER}
 Group=${SERVICE_USER}
+${SUPPLEMENTARY_GROUPS_DIRECTIVE}
 ExecStart=${BINARY_PATH} --config ${CONFIG_PATH} run
 Restart=always
 RestartSec=5
@@ -241,7 +247,8 @@ EOF
 run_root install -m 0644 -o root -g root "${tmp_service}" "${SERVICE_FILE}"
 rm -f "${tmp_service}"
 run_root systemctl daemon-reload
-run_root systemctl enable --now "${SERVICE_NAME}"
+run_root systemctl enable "${SERVICE_NAME}"
+run_root systemctl restart "${SERVICE_NAME}"
 
 echo "Installed and started ${SERVICE_NAME}"
 echo "Config: ${CONFIG_PATH}"
