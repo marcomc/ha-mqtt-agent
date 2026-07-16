@@ -88,6 +88,14 @@ def legacy_0_1_discovery_cleanup_messages(config: AppConfig) -> list[MqttMessage
     return messages
 
 
+def current_discovery_cleanup_messages(config: AppConfig) -> list[MqttMessage]:
+    cleanup_config = replace(config, publish_location=True)
+    return [
+        MqttMessage(topic=message.topic, payload="", retain=True)
+        for message in discovery_messages(cleanup_config)
+    ]
+
+
 def state_message(config: AppConfig, payload: dict[str, object]) -> MqttMessage:
     return MqttMessage(
         topic=config.state_topic,

@@ -778,6 +778,66 @@ def test_cleanup_discovery_records_completion_after_successful_publish(
     assert state["legacy_0_1_discovery_cleanup_completed_at"] == ("2026-06-03T10:00:00+00:00")
 
 
+def test_cleanup_discovery_removes_current_topics_without_state_write(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = AppConfig(state_path=tmp_path / "state.json")
+    captured: dict[str, list[MqttMessage]] = {}
+
+    def publish(
+        _config: AppConfig,
+        messages: Iterable[MqttMessage],
+        *,
+        client_id_suffix: str = "",
+    ) -> None:
+        _ = client_id_suffix
+        captured["messages"] = list(messages)
+
+    monkeypatch.setattr(cli, "publish_messages", publish)
+
+    result = cli._handle_cleanup_discovery(config, legacy_0_1=False, current=True)
+
+    topics = [message.topic for message in captured["messages"]]
+    assert result == 0
+    assert "homeassistant/sensor/host_cpu_temperature/config" in topics
+    assert "homeassistant/device_tracker/host_location/config" in topics
+    assert all(message.payload == "" and message.retain for message in captured["messages"])
+    assert not config.state_path.exists()
+
+
+def test_main_cleans_current_discovery_topics(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.toml"
+    state_path = tmp_path / "state.json"
+    config_path.write_text(
+        f'mqtt_host = "mqtt.example.test"\nstate_path = "{state_path}"\n',
+        encoding="utf-8",
+    )
+    captured: dict[str, list[MqttMessage]] = {}
+
+    def publish(
+        _config: AppConfig,
+        messages: Iterable[MqttMessage],
+        *,
+        client_id_suffix: str = "",
+    ) -> None:
+        _ = client_id_suffix
+        captured["messages"] = list(messages)
+
+    monkeypatch.setattr(cli, "publish_messages", publish)
+
+    result = cli.main(["--config", str(config_path), "cleanup-discovery", "--current"])
+
+    assert result == 0
+    assert "homeassistant/sensor/host_cpu_temperature/config" in {
+        message.topic for message in captured["messages"]
+    }
+    assert not state_path.exists()
+
+
 def test_cleanup_discovery_does_not_record_completion_when_publish_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -37,7 +37,7 @@ CIDR, gateway, and gateway MAC where available. Existing configs are preserved.
 - `argparse` for a small CLI surface
 - TOML config loading via `tomllib`
 - platform provider selection for macOS and Linux
-- `doctor`, `publish-once --dry-run`, and explicit legacy discovery cleanup
+- `doctor`, `publish-once --dry-run`, and explicit device-scoped discovery cleanup
 - `make check` for tests, typing, formatting, Markdown, and shell linting
 
 ## Intended Workflow

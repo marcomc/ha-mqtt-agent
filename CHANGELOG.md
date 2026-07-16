@@ -1,8 +1,18 @@
+<!-- markdownlint-configure-file { "MD024": { "siblings_only": true } } -->
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+## [0.3.1] - 2026-07-16
+
+### Added
+
+- Added `cleanup-discovery --current` to remove retained current discovery
+  topics for the configured device only, without enumerating broker topics or
+  changing other devices.
 
 ## [0.3.0] - 2026-07-13
 

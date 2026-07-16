@@ -19,6 +19,7 @@ from .doctor import build_doctor_report, render_doctor_text
 from .mqtt import (
     MqttMessage,
     availability_message,
+    current_discovery_cleanup_messages,
     discovery_messages,
     legacy_0_1_discovery_cleanup_messages,
     location_attributes_message,
@@ -70,7 +71,7 @@ def format_main_help() -> str:
             "  doctor        Check local readiness without changing state",
             "  authorize-wifi Ask macOS for permission to read the Wi-Fi SSID",
             "  publish-once  Publish discovery and one telemetry sample",
-            "  cleanup-discovery Remove retained legacy discovery topics",
+            "  cleanup-discovery Remove retained discovery topics for this device",
             "  run           Publish telemetry continuously",
             "",
             "Run `ha-mqtt-agent <command> --help` for command-specific help.",
@@ -172,12 +173,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     cleanup_parser = subparsers.add_parser(
         "cleanup-discovery",
-        help="Explicitly remove retained legacy discovery topics for this device.",
+        help="Explicitly remove retained discovery topics for this device.",
     )
     cleanup_parser.add_argument(
         "--legacy-0-1",
         action="store_true",
         help="Clean known 0.1.x retained discovery topics for the current device_id.",
+    )
+    cleanup_parser.add_argument(
+        "--current",
+        action="store_true",
+        help="Clean all current retained discovery topics for the current device_id.",
     )
 
     run_parser = subparsers.add_parser(
@@ -807,23 +813,30 @@ def _handle_publish_once(
     return 0
 
 
-def _handle_cleanup_discovery(config: AppConfig, *, legacy_0_1: bool) -> int:
-    if not legacy_0_1:
-        print("cleanup-discovery requires --legacy-0-1", file=sys.stderr)
+def _handle_cleanup_discovery(
+    config: AppConfig,
+    *,
+    legacy_0_1: bool,
+    current: bool = False,
+) -> int:
+    if legacy_0_1 == current:
+        print(
+            "cleanup-discovery requires exactly one of --legacy-0-1 or --current",
+            file=sys.stderr,
+        )
         return 2
-    provider = _telemetry_provider()
+    messages = (
+        legacy_0_1_discovery_cleanup_messages(config)
+        if legacy_0_1
+        else current_discovery_cleanup_messages(config)
+    )
     publish_messages(
         config,
-        _publish_once_messages(
-            config,
-            provider=provider,
-            skip_discovery=False,
-            update_energy=False,
-            include_cleanup=True,
-        ),
+        messages,
         client_id_suffix=f"-cleanup-{os.getpid()}",
     )
-    _record_legacy_0_1_cleanup(config.state_path)
+    if legacy_0_1:
+        _record_legacy_0_1_cleanup(config.state_path)
     return 0
 
 
@@ -971,6 +984,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _handle_cleanup_discovery(
             config=config,
             legacy_0_1=bool(getattr(args, "legacy_0_1", False)),
+            current=bool(getattr(args, "current", False)),
         )
     if args.command == "run":
         return _handle_run(

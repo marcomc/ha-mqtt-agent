@@ -10,6 +10,7 @@ from paho.mqtt.enums import MQTTErrorCode
 from ha_mqtt_agent.config import AppConfig
 from ha_mqtt_agent.mqtt import (
     MqttMessage,
+    current_discovery_cleanup_messages,
     discovery_messages,
     legacy_0_1_discovery_cleanup_messages,
     location_attributes_message,
@@ -171,6 +172,18 @@ def test_legacy_cleanup_messages_remove_known_current_device_topics_only() -> No
     assert "homeassistant/sensor/workstation_power/config" in topics
     assert "homeassistant/device_tracker/workstation_location/config" in topics
     assert "homeassistant/sensor/workstation_cpu_temperature/config" not in topics
+    assert all("/workstation_" in message.topic for message in messages)
+    assert all(message.payload == "" and message.retain for message in messages)
+
+
+def test_current_cleanup_messages_remove_all_current_device_discovery_topics() -> None:
+    config = AppConfig(device_id="workstation", publish_location=False)
+
+    messages = current_discovery_cleanup_messages(config)
+    topics = {message.topic for message in messages}
+
+    assert "homeassistant/sensor/workstation_cpu_temperature/config" in topics
+    assert "homeassistant/device_tracker/workstation_location/config" in topics
     assert all("/workstation_" in message.topic for message in messages)
     assert all(message.payload == "" and message.retain for message in messages)
 

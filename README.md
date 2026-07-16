@@ -85,7 +85,8 @@ flowchart LR
 - Persistent local energy accumulator on macOS that survives restarts.
 - Packaged command-line app exposed as `ha-mqtt-agent`.
 - Read-only `doctor` diagnostics and `publish-once --dry-run` message preview.
-- Explicit legacy MQTT discovery cleanup for retained `0.1.x` topics.
+- Explicit device-scoped MQTT discovery cleanup for retained current and
+  legacy `0.1.x` topics.
 
 ## Requirements
 
@@ -550,6 +551,14 @@ Explicitly remove retained `0.1.x` discovery topics for the current
 
 ```bash
 ha-mqtt-agent cleanup-discovery --legacy-0-1
+```
+
+Remove the current retained discovery topics for the configured device when
+the integration is being retired. This does not enumerate broker topics or
+affect any other device:
+
+```bash
+ha-mqtt-agent cleanup-discovery --current
 ```
 
 Run continuously:
