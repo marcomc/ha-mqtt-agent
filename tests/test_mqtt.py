@@ -392,6 +392,17 @@ def test_publish_messages_raises_on_publish_failure(monkeypatch: pytest.MonkeyPa
     assert client.disconnected is True
 
 
+def test_publish_messages_disconnects_before_stopping_network_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient()
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    publish_messages(AppConfig(), [])
+
+    assert client.lifecycle_events == ["disconnect", "loop_stop"]
+
+
 def test_probe_mqtt_connection_checks_broker_connack_without_publishing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -444,6 +455,7 @@ class _FakeClient:
         self.loop_started = False
         self.loop_stopped = False
         self.disconnected = False
+        self.lifecycle_events: list[str] = []
         self.published_topics: list[str] = []
         self.on_connect: Callable[[object, object, object, object, object], None] | None = None
 
@@ -476,6 +488,8 @@ class _FakeClient:
 
     def loop_stop(self) -> None:
         self.loop_stopped = True
+        self.lifecycle_events.append("loop_stop")
 
     def disconnect(self) -> None:
         self.disconnected = True
+        self.lifecycle_events.append("disconnect")

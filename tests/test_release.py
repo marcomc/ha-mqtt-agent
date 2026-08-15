@@ -9,7 +9,7 @@ from ha_mqtt_agent import __version__
 
 
 def test_release_version_metadata_is_synchronized() -> None:
-    expected_version = "0.3.1"
+    expected_version = "0.3.2"
     project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
     helper = cast(
         dict[str, Any],
