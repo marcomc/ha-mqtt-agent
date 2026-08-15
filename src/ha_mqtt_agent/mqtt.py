@@ -172,8 +172,10 @@ def publish_messages(
             _raise_for_mqtt_error(result.rc, f"publish to {message.topic}")
             result.wait_for_publish()
     finally:
-        client.disconnect()
-        client.loop_stop()
+        try:
+            client.disconnect()
+        finally:
+            client.loop_stop()
 
 
 def probe_mqtt_connection(config: AppConfig, *, client_id_suffix: str = "") -> None:
