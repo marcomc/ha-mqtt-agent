@@ -73,6 +73,9 @@ Expected checks:
 - For broker-unreachable recovery paths, cap retry backoff and keep lightweight
   connectivity probes separate from expensive sampling so reconnect does not lag
   behind Home Assistant freshness expiry.
+- When closing an MQTT client with a Last Will, send the graceful `DISCONNECT`
+  while the network loop is still running, then stop the loop in guaranteed
+  cleanup; test the lifecycle order and the disconnect-failure path.
 - When adding optional Home Assistant entities, gate discovery and auxiliary
   publish topics on the same config flag that gates the runtime telemetry.
 - When adding or changing providers, keep provider-supported capabilities

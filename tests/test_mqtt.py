@@ -392,6 +392,30 @@ def test_publish_messages_raises_on_publish_failure(monkeypatch: pytest.MonkeyPa
     assert client.disconnected is True
 
 
+def test_publish_messages_disconnects_before_stopping_network_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient()
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    publish_messages(AppConfig(), [])
+
+    assert client.lifecycle_events == ["disconnect", "loop_stop"]
+
+
+def test_publish_messages_stops_network_loop_if_disconnect_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient(disconnect_error=RuntimeError("disconnect failed"))
+    monkeypatch.setattr("ha_mqtt_agent.mqtt.mqtt.Client", lambda *args, **kwargs: client)
+
+    with pytest.raises(RuntimeError, match="disconnect failed"):
+        publish_messages(AppConfig(), [])
+
+    assert client.loop_stopped is True
+    assert client.lifecycle_events == ["disconnect", "loop_stop"]
+
+
 def test_probe_mqtt_connection_checks_broker_connack_without_publishing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -437,13 +461,16 @@ class _FakeClient:
         connect_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
         publish_rc: MQTTErrorCode = paho_mqtt.MQTT_ERR_SUCCESS,
         connack_reason_code: object = "Success",
+        disconnect_error: Exception | None = None,
     ) -> None:
         self.connect_rc = connect_rc
         self.publish_rc = publish_rc
         self.connack_reason_code = connack_reason_code
+        self.disconnect_error = disconnect_error
         self.loop_started = False
         self.loop_stopped = False
         self.disconnected = False
+        self.lifecycle_events: list[str] = []
         self.published_topics: list[str] = []
         self.on_connect: Callable[[object, object, object, object, object], None] | None = None
 
@@ -476,6 +503,10 @@ class _FakeClient:
 
     def loop_stop(self) -> None:
         self.loop_stopped = True
+        self.lifecycle_events.append("loop_stop")
 
     def disconnect(self) -> None:
         self.disconnected = True
+        self.lifecycle_events.append("disconnect")
+        if self.disconnect_error is not None:
+            raise self.disconnect_error
